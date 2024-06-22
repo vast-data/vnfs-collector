@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from bcc import BPF
 
+STATKEYS = ["OPEN","CLOSE","READ","RBYTES","WRITE","WBYTES","GETATTR","SETATTR","FLUSH",
+        "FSYNC","LOCK","MMAP","READDIR","CREATE","LINK","UNLINK","LOOKUP","RENAME","ACCESS","LISTXATTR"]
 class PidEnvMap:
     """
     Map interface of pid and the dictionary of the tracked environment
@@ -46,6 +48,9 @@ class PidEnvMap:
         try:
             return self.pidmap[str(pid)]
         except:
+            if debug:
+                print("pid %d not found" % pid)
+                print(self.pidmap)
             return {}
 
 
@@ -140,53 +145,74 @@ class StatsCollector:
             self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattrs
 
     def start(self):
-        self.t = Thread(target=self.collect_stats)
+        self.t = Thread(target=self.poll_stats)
         self.t.daemon = True
         self.t.start()
 
+    def combine_stat(self, stat, new):
+        for key in STATKEYS:
+            stat[key] += new[key]
+
     def collect_stats(self):
+        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        print("######## SAMPLE: " + timestamp + " ########")
+
+        counts = self.b.get_table("counts")
+        statistics = []
+        for k, v in (counts.items_lookup_and_delete_batch() if self.batch_ops else counts.items()):
+            output = {
+                    "TIMESTAMP":    timestamp,
+                    "HOSTNAME":     self.hostname,
+                    "PID":          k.tgid, # real pid is the thread-group id
+                    "UID":          k.uid,
+                    "COMM":         k.comm.decode('utf-8', 'replace'),
+                    "OPEN":         v.opens,
+                    "CLOSE":        v.closes,
+                    "READ":         v.reads,
+                    "RBYTES":       v.rbytes,
+                    "WRITE":         v.writes,
+                    "WBYTES":       v.wbytes,
+                    "GETATTR":      v.getattrs,
+                    "SETATTR":      v.setattrs,
+                    "FLUSH":        v.flushes,
+                    "FSYNC":        v.fsyncs,
+                    "LOCK":         v.locks,
+                    "MMAP":         v.mmaps,
+                    "READDIR":      v.readdirs,
+                    "CREATE":       v.creates,
+                    "LINK":         v.links,
+                    "UNLINK":       v.unlinks,
+                    "LOOKUP":       v.lookups,
+                    "RENAME":       v.renames,
+                    "ACCESS":       v.accesses,
+                    "LISTXATTR":    v.listxattrs,
+                    "TAGS":         self.PidEnvMap.get(k.tgid),
+            }
+
+            # search of we have multiple threads (pid) of the same process (tgid)
+            match = list(filter(lambda stat: stat["PID"] == output["PID"], statistics))
+            if match:
+                if debug:
+                    print("StatsCollector: combined stat for PID %d (thread %d)" %
+                            (output["PID"], k.pid))
+                self.combine_stat(match[0], output)
+            else:
+                statistics.append(output)
+
+        if not self.batch_ops:
+            counts.clear()
+
+        return statistics
+
+    def poll_stats(self):
         while True:
             try:
                 sleep(self.interval)
             except:
                 return
-            timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            print("######## SAMPLE: " + timestamp + " ########")
-
-            counts = self.b.get_table("counts")
-            for k, v in (counts.items_lookup_and_delete_batch() if self.batch_ops else counts.items()):
-                output = {
-                        "TIMESTAMP":    timestamp,
-                        "HOSTNAME":     self.hostname,
-                        "PID":          k.pid,
-                        "UID":          k.uid,
-                        "COMM":         k.comm.decode('utf-8', 'replace'),
-                        "OPEN":         v.opens,
-                        "CLOSE":        v.closes,
-                        "READ":         v.reads,
-                        "RBYTES":       v.rbytes,
-                        "WRTE":         v.writes,
-                        "WBYTES":       v.wbytes,
-                        "GETATTR":      v.getattrs,
-                        "SETATTR":      v.setattrs,
-                        "FLUSH":        v.flushes,
-                        "FSYNC":        v.fsyncs,
-                        "LOCK":         v.locks,
-                        "MMAP":         v.mmaps,
-                        "READDIR":      v.readdirs,
-                        "CREATE":       v.creates,
-                        "LINK":         v.links,
-                        "UNLINK":       v.unlinks,
-                        "LOOKUP":       v.lookups,
-                        "RENAME":       v.renames,
-                        "ACCESS":       v.accesses,
-                        "LISTXATTR":    v.listxattrs,
-                        "TAGS":         self.PidEnvMap.get(k.pid),
-                }
-                print(output)
-
-            if not self.batch_ops:
-                counts.clear()
+            statistics = self.collect_stats()
+            for stat in statistics:
+                print(stat)
 
 
 def split_list(values):
