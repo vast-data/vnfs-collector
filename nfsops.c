@@ -6,6 +6,7 @@
 // the key for the output summary
 struct info_t {
     u32 pid;
+    u32 tgid;
     u32 uid;
     char comm[TASK_COMM_LEN];
 };
@@ -55,7 +56,7 @@ int trace_execve(struct pt_regs *ctx,
 {
 
     struct pidinfo_t data = {
-        .pid = bpf_get_current_pid_tgid(),
+        .pid = bpf_get_current_pid_tgid() >> 32,
     };
     events.perf_submit(ctx, &data, sizeof(data));
     return 0;
@@ -81,6 +82,7 @@ static struct val_t *get()
 {
     struct info_t info = {
         .pid = bpf_get_current_pid_tgid(),
+        .tgid = bpf_get_current_pid_tgid() >> 32,
         .uid = bpf_get_current_uid_gid(),
     };
     bpf_get_current_comm(&info.comm, sizeof(info.comm));
