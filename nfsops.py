@@ -13,8 +13,68 @@ from datetime import datetime
 from pathlib import Path
 from bcc import BPF
 
-STATKEYS = ["OPEN","CLOSE","READ","RBYTES","WRITE","WBYTES","GETATTR","SETATTR","FLUSH",
-        "FSYNC","LOCK","MMAP","READDIR","CREATE","LINK","UNLINK","LOOKUP","RENAME","ACCESS","LISTXATTR"]
+STATKEYS = [
+    "OPEN_COUNT",
+    "OPEN_ERRORS",      
+    "OPEN_DURATION",
+    "CLOSE_COUNT",
+    "CLOSE_ERRORS",
+    "CLOSE_DURATION",
+    "READ_COUNT",
+    "READ_ERRORS",
+    "READ_DURATION",
+    "READ_BYTES",
+    "WRITE_COUNT",
+    "WRITE_ERRORS",
+    "WRITE_DURATION",
+    "WRITE_BYTES",
+    "GETATTR_COUNT",
+    "GETATTR_ERRORS",
+    "GETATTR_DURATION",
+    "SETATTR_COUNT",
+    "SETATTR_ERRORS",
+    "SETATTR_DURATION",
+    "FLUSH_COUNT",
+    "FLUSH_ERRORS",
+    "FLUSH_DURATION",
+    "FSYNC_COUNT",
+    "FSYNC_ERRORS",
+    "FSYNC_DURATION",
+    "LOCK_COUNT",
+    "LOCK_ERRORS",
+    "LOCK_DURATION",
+    "MMAP_COUNT",
+    "MMAP_ERRORS",
+    "MMAP_DURATION",
+    "READDIR_COUNT",
+    "READDIR_ERRORS",
+    "READDIR_DURATION",
+    "CREATE_COUNT",
+    "CREATE_ERRORS",
+    "CREATE_DURATION",
+    "LINK_COUNT",
+    "LINK_ERRORS",
+    "LINK_DURATION",
+    "UNLINK_COUNT",
+    "UNLINK_ERRORS",
+    "UNLINK_DURATION",
+    "SYMLINK_COUNT",
+    "SYMLINK_ERRORS",
+    "SYMLINK_DURATION",
+    "LOOKUP_COUNT",
+    "LOOKUP_ERRORS",
+    "LOOKUP_DURATION",
+    "RENAME_COUNT",
+    "RENAME_ERRORS",
+    "RENAME_DURATION",
+    "ACCESS_COUNT",
+    "ACCESS_ERRORS",
+    "ACCESS_DURATION",
+    "LISTXATTR_COUNT",
+    "LISTXATTR_ERRORS",
+    "LISTXATTR_DURATION",
+]
+
 class PidEnvMap:
     """
     Map interface of pid and the dictionary of the tracked environment
@@ -113,36 +173,59 @@ class StatsCollector:
 
     def attach(self):
         # file attachments
-        self.b.attach_kprobe(event="nfs_file_read", fn_name="trace_nfs_file_read")               # updates reads,rbytes
-        self.b.attach_kprobe(event="nfs_file_write", fn_name="trace_nfs_file_write")             # updates writes,wbytes
-        self.b.attach_kprobe(event="nfs_file_open", fn_name="trace_nfs_file_open")               # updates opens
-        self.b.attach_kprobe(event="nfs_getattr", fn_name="trace_nfs_getattr")                   # updates getattrs
-        self.b.attach_kprobe(event="nfs_setattr", fn_name="trace_nfs_setattr")                   # updates setattrs
-        self.b.attach_kprobe(event="nfs_file_flush", fn_name="trace_nfs_file_flush")             # updates flushes
-        self.b.attach_kprobe(event="nfs_file_fsync", fn_name="trace_nfs_file_fsync")             # updates fsyncs
+        self.b.attach_kprobe(event="nfs_file_read", fn_name="trace_nfs_file_read")               # updates read count,rbytes
+        self.b.attach_kretprobe(event="nfs_file_read", fn_name="trace_nfs_file_read_ret")        # updates read errors,duration
+        self.b.attach_kprobe(event="nfs_file_write", fn_name="trace_nfs_file_write")             # updates write count,bytes
+        self.b.attach_kretprobe(event="nfs_file_write", fn_name="trace_nfs_file_write_ret")      # updates write errors,duration
+        self.b.attach_kprobe(event="nfs_file_open", fn_name="trace_nfs_file_open")               # updates open count
+        self.b.attach_kretprobe(event="nfs_file_open", fn_name="trace_nfs_file_open_ret")        # updates open errors,duration
+        self.b.attach_kprobe(event="nfs_getattr", fn_name="trace_nfs_getattr")                   # updates getattr count
+        self.b.attach_kretprobe(event="nfs_getattr", fn_name="trace_nfs_getattr")                # updates getattr errors,duration
+        self.b.attach_kprobe(event="nfs_setattr", fn_name="trace_nfs_setattr")                   # updates setattr count
+        self.b.attach_kretprobe(event="nfs_setattr", fn_name="trace_nfs_setattr_ret")            # updates setattr errors,duration
+        self.b.attach_kprobe(event="nfs_file_flush", fn_name="trace_nfs_file_flush")             # updates flush count
+        self.b.attach_kretprobe(event="nfs_file_flush", fn_name="trace_nfs_file_flush_ret")      # updates flush errors,duration
+        self.b.attach_kprobe(event="nfs_file_fsync", fn_name="trace_nfs_file_fsync")             # updates fsync count
+        self.b.attach_kretprobe(event="nfs_file_fsync", fn_name="trace_nfs_file_fsync_ret")      # updates fsync errors,duration
         # (XXX: should we track unlocks as well)
-        self.b.attach_kprobe(event="nfs_lock", fn_name="trace_nfs_lock")                         # updates locks
-        self.b.attach_kprobe(event="nfs_flock", fn_name="trace_nfs_lock")                        # updates locks
+        self.b.attach_kprobe(event="nfs_lock", fn_name="trace_nfs_lock")                         # updates lock count
+        self.b.attach_kretprobe(event="nfs_lock", fn_name="trace_nfs_lock_ret")                  # updates lock errors,duration
+        self.b.attach_kprobe(event="nfs_flock", fn_name="trace_nfs_lock")                        # updates lock count
+        self.b.attach_kretprobe(event="nfs_flock", fn_name="trace_nfs_lock_ret")                 # updates lock errors,duration
         self.b.attach_kprobe(event="nfs_file_splice_read", fn_name="trace_nfs_file_splice_read") # updates reads,rbytes
-        self.b.attach_kprobe(event="nfs_file_mmap", fn_name="trace_nfs_file_mmap")               # updates mmaps
-        self.b.attach_kprobe(event="nfs_file_release", fn_name="trace_nfs_file_release")         # updates closes
+        self.b.attach_kprobe(event="nfs_file_mmap", fn_name="trace_nfs_file_mmap")               # updates mmap count
+        self.b.attach_kretprobe(event="nfs_file_mmap", fn_name="trace_nfs_file_mmap_ret")        # updates mmap errors,duration
+        self.b.attach_kprobe(event="nfs_file_release", fn_name="trace_nfs_file_release")         # updates close count
+        self.b.attach_kretprobe(event="nfs_file_release", fn_name="trace_nfs_file_release_ret")  # updates close errors,duration
         # directory attachments
-        self.b.attach_kprobe(event="nfs_readdir", fn_name="trace_nfs_readdir")                   # updates readdirs
-        self.b.attach_kprobe(event="nfs_create", fn_name="trace_nfs_create")                     # updates creates
-        self.b.attach_kprobe(event="nfs_link", fn_name="trace_nfs_link")                         # updates links
-        self.b.attach_kprobe(event="nfs_unlink", fn_name="trace_nfs_unlink")                     # updates unlinks
-        self.b.attach_kprobe(event="nfs_symlink", fn_name="trace_nfs_symlink")                   # updates symlinks
-        self.b.attach_kprobe(event="nfs_lookup", fn_name="trace_nfs_lookup")                     # updates lookups
-        self.b.attach_kprobe(event="nfs_rename", fn_name="trace_nfs_rename")                     # updates renames
-        self.b.attach_kprobe(event="nfs_do_access", fn_name="trace_nfs_do_access")               # updates accesses
+        self.b.attach_kprobe(event="nfs_readdir", fn_name="trace_nfs_readdir")                   # updates readdir count
+        self.b.attach_kretprobe(event="nfs_readdir", fn_name="trace_nfs_readdir_ret")            # updates readdir errors,duration
+        self.b.attach_kprobe(event="nfs_create", fn_name="trace_nfs_create")                     # updates create count
+        self.b.attach_kretprobe(event="nfs_create", fn_name="trace_nfs_create_ret")              # updates create errors,duration
+        self.b.attach_kprobe(event="nfs_link", fn_name="trace_nfs_link")                         # updates link count
+        self.b.attach_kretprobe(event="nfs_link", fn_name="trace_nfs_link_ret")                  # updates link errors,duration
+        self.b.attach_kprobe(event="nfs_unlink", fn_name="trace_nfs_unlink")                     # updates unlink count
+        self.b.attach_kretprobe(event="nfs_unlink", fn_name="trace_nfs_unlink_ret")              # updates unlink errors,duration
+        self.b.attach_kprobe(event="nfs_symlink", fn_name="trace_nfs_symlink")                   # updates symlink count
+        self.b.attach_kretprobe(event="nfs_symlink", fn_name="trace_nfs_symlink_ret")            # updates symlink errors,duration
+        self.b.attach_kprobe(event="nfs_lookup", fn_name="trace_nfs_lookup")                     # updates lookup count
+        self.b.attach_kretprobe(event="nfs_lookup", fn_name="trace_nfs_lookup_ret")              # updates lookup errors,duration
+        self.b.attach_kprobe(event="nfs_rename", fn_name="trace_nfs_rename")                     # updates rename count
+        self.b.attach_kretprobe(event="nfs_rename", fn_name="trace_nfs_rename_ret")              # updates rename errors,duration
+        self.b.attach_kprobe(event="nfs_do_access", fn_name="trace_nfs_do_access")               # updates access
+        self.b.attach_kprobe(event="nfs_do_access", fn_name="trace_nfs_do_access_ret")           # updates access errors,duration
         # nfs4 attachments
         if BPF.get_kprobe_functions(b'nfs4_file_open'):
-            self.b.attach_kprobe(event="nfs4_file_open", fn_name="trace_nfs_file_open")         # updates opens
-            self.b.attach_kprobe(event="nfs4_file_flush", fn_name="trace_nfs_file_flush")       # updates flushes
+            self.b.attach_kprobe(event="nfs4_file_open", fn_name="trace_nfs_file_open")         # updates open count
+            self.b.attach_kretprobe(event="nfs4_file_open", fn_name="trace_nfs_file_open_ret")  # updates open errors,duration
+            self.b.attach_kprobe(event="nfs4_file_flush", fn_name="trace_nfs_file_flush")       # updates flush count
+            self.b.attach_kretprobe(event="nfs4_file_flush", fn_name="trace_nfs_file_flush_ret")# updates flush errors,duration
         if BPF.get_kprobe_functions(b'nfs4_listxattr'):
-            self.b.attach_kprobe(event="nfs4_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattrs
+            self.b.attach_kprobe(event="nfs4_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattr count
+            self.b.attach_kretprobe(event="nfs4_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
         if BPF.get_kprobe_functions(b'nfs3_listxattr'):
-            self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattrs
+            self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattr count
+            self.b.attach_kretprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
 
     def start(self):
         self.t = Thread(target=self.poll_stats)
@@ -161,31 +244,70 @@ class StatsCollector:
         statistics = []
         for k, v in (counts.items_lookup_and_delete_batch() if self.batch_ops else counts.items()):
             output = {
-                    "TIMESTAMP":    timestamp,
-                    "HOSTNAME":     self.hostname,
-                    "PID":          k.tgid, # real pid is the thread-group id
-                    "UID":          k.uid,
-                    "COMM":         k.comm.decode('utf-8', 'replace'),
-                    "OPEN":         v.opens,
-                    "CLOSE":        v.closes,
-                    "READ":         v.reads,
-                    "RBYTES":       v.rbytes,
-                    "WRITE":         v.writes,
-                    "WBYTES":       v.wbytes,
-                    "GETATTR":      v.getattrs,
-                    "SETATTR":      v.setattrs,
-                    "FLUSH":        v.flushes,
-                    "FSYNC":        v.fsyncs,
-                    "LOCK":         v.locks,
-                    "MMAP":         v.mmaps,
-                    "READDIR":      v.readdirs,
-                    "CREATE":       v.creates,
-                    "LINK":         v.links,
-                    "UNLINK":       v.unlinks,
-                    "LOOKUP":       v.lookups,
-                    "RENAME":       v.renames,
-                    "ACCESS":       v.accesses,
-                    "LISTXATTR":    v.listxattrs,
+                    "TIMESTAMP":        timestamp,
+                    "HOSTNAME":         self.hostname,
+                    "PID":              k.tgid, # real pid is the thread-group id
+                    "UID":              k.uid,
+                    "COMM":             k.comm.decode('utf-8', 'replace'),
+                    "OPEN_COUNT":       v.open.count,
+                    "OPEN_ERRORS":      v.open.errors,
+                    "OPEN_DURATION":    v.open.duration,
+                    "CLOSE_COUNT":      v.close.count,
+                    "CLOSE_ERRORS":     v.close.errors,
+                    "CLOSE_DURATION":   v.close.duration,
+                    "READ_COUNT":       v.read.count,
+                    "READ_ERRORS":      v.read.errors,
+                    "READ_DURATION":    v.read.duration,
+                    "READ_BYTES":       v.rbytes,
+                    "WRITE_COUNT":      v.write.count,
+                    "WRITE_ERRORS":     v.write.errors,
+                    "WRITE_DURATION":   v.write.duration,
+                    "WRITE_BYTES":      v.wbytes,
+                    "GETATTR_COUNT":    v.getattr.count,
+                    "GETATTR_ERRORS":   v.getattr.errors,
+                    "GETATTR_DURATION": v.getattr.duration,
+                    "SETATTR_COUNT":    v.setattr.count,
+                    "SETATTR_ERRORS":   v.setattr.errors,
+                    "SETATTR_DURATION": v.setattr.duration,
+                    "FLUSH_COUNT":      v.flush.count,
+                    "FLUSH_ERRORS":     v.flush.errors,
+                    "FLUSH_DURATION":   v.flush.duration,
+                    "FSYNC_COUNT":      v.fsync.count,
+                    "FSYNC_ERRORS":     v.fsync.errors,
+                    "FSYNC_DURATION":   v.fsync.duration,
+                    "LOCK_COUNT":       v.lock.count,
+                    "LOCK_ERRORS":      v.lock.errors,
+                    "LOCK_DURATION":    v.lock.duration,
+                    "MMAP_COUNT":       v.mmap.count,
+                    "MMAP_ERRORS":      v.mmap.errors,
+                    "MMAP_DURATION":    v.mmap.duration,
+                    "READDIR_COUNT":    v.readdir.count,
+                    "READDIR_ERRORS":   v.readdir.errors,
+                    "READDIR_DURATION": v.readdir.duration,
+                    "CREATE_COUNT":     v.create.count,
+                    "CREATE_ERRORS":    v.create.errors,
+                    "CREATE_DURATION":  v.create.duration,
+                    "LINK_COUNT":       v.link.count,
+                    "LINK_ERRORS":      v.link.errors,
+                    "LINK_DURATION":    v.link.duration,
+                    "UNLINK_COUNT":     v.unlink.count,
+                    "UNLINK_ERRORS":    v.unlink.errors,
+                    "UNLINK_DURATION":  v.unlink.duration,
+                    "SYMLINK_COUNT":    v.symlink.count,
+                    "SYMLINK_ERRORS":   v.symlink.errors,
+                    "SYMLINK_DURATION": v.symlink.duration,
+                    "LOOKUP_COUNT":     v.lookup.count,
+                    "LOOKUP_ERRORS":    v.lookup.errors,
+                    "LOOKUP_DURATION":  v.lookup.duration,
+                    "RENAME_COUNT":     v.rename.count,
+                    "RENAME_ERRORS":    v.rename.errors,
+                    "RENAME_DURATION":  v.rename.duration,
+                    "ACCESS_COUNT":     v.access.count,
+                    "ACCESS_ERRORS":    v.access.errors,
+                    "ACCESS_DURATION":  v.access.duration,
+                    "LISTXATTR_COUNT":  v.listxattr.count,
+                    "LISTXATTR_ERRORS": v.listxattr.errors,
+                    "LISTXATTR_DURATION":v.listxattr.duration,
                     "TAGS":         self.PidEnvMap.get(k.tgid),
             }
 
