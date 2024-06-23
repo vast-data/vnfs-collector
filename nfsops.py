@@ -113,6 +113,14 @@ class PidEnvMap:
                 print(self.pidmap)
             return {}
 
+class ScreenOutputTarget:
+    def __init__(self):
+        pass
+
+    def output(self, statistics):
+        for stat in statistics:
+            print(stat)
+
 
 def get_pid_envs(cpu, data, size):
     data = bpf["events"].event(data)
@@ -162,11 +170,12 @@ class StatsCollector:
     Tracer traps pid execution and collects the existance of the tracked
     environment variables.
     """
-    def __init__(self, bpf, PidEnvMap, interval=60):
+    def __init__(self, bpf, PidEnvMap, OutputTarget, interval=60):
         self.b = bpf
         self.PidEnvMap = PidEnvMap
         self.interval = interval
         self.hostname = os.getenv("HOSTNAME")
+        self.output_target = OutputTarget
         # check whether hash table batch ops is supported
         self.batch_ops = True if BPF.kernel_struct_has_field(b'bpf_map_ops',
             b'map_lookup_and_delete_batch') == 1 else False
@@ -333,8 +342,7 @@ class StatsCollector:
             except:
                 return
             statistics = self.collect_stats()
-            for stat in statistics:
-                print(stat)
+            self.output_target.output(statistics)
 
 
 def split_list(values):
@@ -369,6 +377,8 @@ if __name__ == "__main__":
             help="enable debug prints")
     parser.add_argument("--ebpf", action="store_true",
             help="dump BPF program text and exit")
+    parser.add_argument("-o", "--output", choices=["screen"],
+            default="screen", help="samples output target")
     args = parser.parse_args()
     debug=args.debug
 
@@ -393,8 +403,10 @@ if __name__ == "__main__":
         envTracer.attach()
         envTracer.start()
 
+    if args.output == "screen":
+        output = ScreenOutputTarget()
     statsCollector = StatsCollector(bpf=bpf, PidEnvMap=pidEnvMap,
-                            interval=args.interval)
+                            OutputTarget=output, interval=args.interval)
     statsCollector.attach()
     statsCollector.start()
 
