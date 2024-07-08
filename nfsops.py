@@ -6,12 +6,16 @@
 #
 # uses in-kernel eBPF maps to store per process summaries for efficiency.
 
-import os, argparse, signal
+import os, argparse, signal, psutil
 from threading import Thread
 from time import sleep
 from datetime import datetime
 from pathlib import Path
 from bcc import BPF
+os.environ['PROMETHEUS_DISABLE_CREATED_SERIES'] = "1"
+import prometheus_client as prom
+from prometheus_client.registry import Collector
+from prometheus_client.core import GaugeMetricFamily, Summary, Counter, CounterMetricFamily
 
 STATKEYS = [
     "OPEN_COUNT",
@@ -74,6 +78,45 @@ STATKEYS = [
     "LISTXATTR_ERRORS",
     "LISTXATTR_DURATION",
 ]
+
+class MountsMap:
+    def __init__(self):
+        self.map = {}
+        self.refresh_map()
+
+    def refresh_map(self):
+        mountmap = {}
+        for f in os.listdir("/sys/fs/nfs"):
+            if f == "net":
+                continue
+            mountmap[f] = self._findmount(f)
+        self.map = mountmap
+
+    def devt_to_str(self, st_dev):
+        MINORBITS = 20
+        return "{}:{}".format(st_dev >> MINORBITS, st_dev & 2**MINORBITS-1)
+
+    def _findmount(self, devname):
+        for p in psutil.disk_partitions(all=True):
+            if 'nfs' not in p.fstype:
+                continue
+            devt = self.devt_to_str(os.stat(p.mountpoint).st_dev)
+            if devname == devt:
+                return p.mountpoint
+        print("WARNING: No mountpoint found for devt {}".format(devname))
+        return ""
+
+    def get_mountpoint(self, st_dev):
+        dev = self.devt_to_str(st_dev)
+        try:
+            return self.map[dev]
+        except KeyError:
+            self.refresh_map()
+            if dev in self.map.keys():
+                return self.map[dev]
+        print("WARNING: No mountpoint found for devt {}".format(dev))
+        return ""
+
 
 class PidEnvMap:
     """
@@ -241,6 +284,9 @@ class StatsCollector:
         self.t.daemon = True
         self.t.start()
 
+    def stat_match(self, stat, new):
+        return stat["PID"] == new["PID"] and stat["MOUNT"] == new["MOUNT"]
+
     def combine_stat(self, stat, new):
         for key in STATKEYS:
             stat[key] += new[key]
@@ -318,10 +364,11 @@ class StatsCollector:
                     "LISTXATTR_ERRORS": v.listxattr.errors,
                     "LISTXATTR_DURATION":v.listxattr.duration,
                     "TAGS":         self.PidEnvMap.get(k.tgid),
+                    "MOUNT":        mountsMap.get_mountpoint(k.sbdev),
             }
 
             # search of we have multiple threads (pid) of the same process (tgid)
-            match = list(filter(lambda stat: stat["PID"] == output["PID"], statistics))
+            match = list(filter(lambda stat: self.stat_match(stat, output), statistics))
             if match:
                 if debug:
                     print("StatsCollector: combined stat for PID %d (thread %d)" %
@@ -345,6 +392,94 @@ class StatsCollector:
             self.output_target.output(statistics)
 
 
+class PromCollector(Collector):
+    def __init__(self, StatsCollector):
+        self.collector = StatsCollector
+        self.gauges = {}
+
+    def _create_gauge(self, name, help_text, labels, value):
+        gauge = None
+        if name in self.gauges.keys():
+                gauge = self.gauges[name]
+        else:
+            gauge = GaugeMetricFamily(name, help_text, labels=labels.keys())
+            self.gauges[name] = gauge
+        gauge.add_metric(labels.values(), value)
+        return gauge
+
+    def collect(self):
+        statistics = self.collector.collect_stats()
+        for stat in statistics:
+            labels_kwargs = {
+                "HOSTNAME": stat["HOSTNAME"],
+                "UID": str(stat["UID"]),
+                "COMM": stat["COMM"],
+            }
+            if args.envs:
+                for env in args.envs:
+                    try:
+                        labels_kwargs.update({env: stat["TAGS"][env]})
+                    except:
+                        labels_kwargs.update({env: ""})
+        for stat in statistics:
+            for s in STATKEYS:
+                yield self._create_gauge(s, "", labels_kwargs, stat[s])
+
+
+class PrometheusCollector(StatsCollector):
+    """
+    Tracer traps pid execution and collects the existance of the tracked
+    environment variables.
+    """
+    def __init__(self, bpf, PidEnvMap, OutputTarget, port=9000, interval=60):
+        super().__init__(bpf, PidEnvMap, OutputTarget, interval)
+        self.port = port
+        self.gauges = {}
+        self.collector = PromCollector(self)
+
+    def define_prom_counters(self, labels):
+        for statkey in STATKEYS:
+            self.gauges[statkey] = GaugeMetricFamily(statkey, "", labels)
+            #import ipdb; ipdb.set_trace()
+
+    def start(self):
+        prom.REGISTRY.unregister(prom.PROCESS_COLLECTOR)
+        prom.REGISTRY.unregister(prom.PLATFORM_COLLECTOR)
+        prom.REGISTRY.unregister(prom.GC_COLLECTOR)
+        prom.REGISTRY.register(self.collector)
+        labels = ["HOSTNAME", "UID", "COMM"]
+        if args.envs:
+            labels += args.envs
+        self.define_prom_counters(labels)
+        prom.start_http_server(self.port)
+
+    def stat_match(self, stat, new):
+        return stat["COMM"] == new["COMM"] and  \
+                stat["TAGS"] == new["TAGS"] and \
+                stat["MOUNT"] == new["MOUNT"]
+
+    def update_prom_stats(self, statistics):
+        for stat in statistics:
+            labels_kwargs = {
+                "HOSTNAME": stat["HOSTNAME"],
+                "UID": stat["UID"],
+                "COMM": stat["COMM"],
+            }
+            if args.envs:
+                for env in args.envs:
+                    try:
+                        labels_kwargs.update({env: stat["TAGS"][env]})
+                    except:
+                        labels_kwargs.update({env: ""})
+        for stat in statistics:
+            for s in STATKEYS:
+                self.counters[s].labels(**labels_kwargs).inc(stat[s])
+
+    def poll_stats(self):
+            statistics = self.collect_stats()
+            self.update_prom_stats(statistics)
+            self.output_target.output(statistics)
+
 def split_list(values):
     return values.split(',')
 
@@ -354,6 +489,7 @@ def sighandler(signum, frame):
 debug = 0
 bpf = None
 pidEnvMap = None
+mountsMap = None
 if __name__ == "__main__":
     # arguments
     examples ="""examples:
@@ -377,6 +513,10 @@ if __name__ == "__main__":
             help="enable debug prints")
     parser.add_argument("--ebpf", action="store_true",
             help="dump BPF program text and exit")
+    parser.add_argument("--prometheus", action="store_true",
+            help="start a prometheus exporter")
+    parser.add_argument("--prometheus-port", default=9000,
+            help="start a prometheus exporter")
     parser.add_argument("-o", "--output", choices=["screen"],
             default="screen", help="samples output target")
     args = parser.parse_args()
@@ -397,6 +537,7 @@ if __name__ == "__main__":
     bpf = BPF(text=bpf_text)
 
     pidEnvMap = PidEnvMap(vaccum_interval=args.vaccum)
+    mountsMap = MountsMap()
     # if no envs are given, no need to track
     if args.envs:
         envTracer = EnvTracer(envs=args.envs, bpf=bpf, PidEnvMap=pidEnvMap)
@@ -405,10 +546,14 @@ if __name__ == "__main__":
 
     if args.output == "screen":
         output = ScreenOutputTarget()
-    statsCollector = StatsCollector(bpf=bpf, PidEnvMap=pidEnvMap,
-                            OutputTarget=output, interval=args.interval)
-    statsCollector.attach()
-    statsCollector.start()
+    if args.prometheus:
+        collector = PrometheusCollector(bpf=bpf, PidEnvMap=pidEnvMap,
+                                OutputTarget=output, interval=args.interval)
+    else:
+        collector = StatsCollector(bpf=bpf, PidEnvMap=pidEnvMap,
+                                OutputTarget=output, interval=args.interval)
+    collector.attach()
+    collector.start()
 
     print('Tracing... Output every %d secs...' % args.interval)
     while True:

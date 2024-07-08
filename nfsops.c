@@ -3,23 +3,31 @@
 #include <linux/uio.h>
 #include <uapi/linux/ptrace.h>
 
+struct start_t {
+	struct inode *inode;
+	u64 start;
+	u64 count;
+};
+
+BPF_HASH(starts, u32, struct start_t);
+
 // the key for the output summary
 struct info_t {
 	u32 pid;
 	u32 tgid;
 	u32 uid;
 	char comm[TASK_COMM_LEN];
+	u32 sbdev;
 };
 
 struct stat_t {
-	u32 count;
-	u32 errors;
-	u64 start;
+	u64 count;
 	u64 duration;
-};
+	u32 errors;
+} __attribute__((packed));
 
 // the value of the output summary
-struct val_t {
+struct stats_t {
 	// regular file operations
 	struct stat_t open;
 	struct stat_t close;
@@ -48,7 +56,7 @@ struct val_t {
 	struct stat_t listxattr;
 };
 
-BPF_HASH(counts, struct info_t, struct val_t);
+BPF_HASH(counts, struct info_t, struct stats_t);
 
 struct pidinfo_t {
 	u32 pid;
@@ -69,6 +77,53 @@ int trace_execve(struct pt_regs *ctx,
 	return 0;
 }
 
+static struct stats_t *get_stats(u64 *start_time, u64 *byte_count)
+{
+	u32 pid = bpf_get_current_pid_tgid();
+
+	struct start_t *startp = starts.lookup(&pid);
+	if (!startp)
+		return NULL;
+	// update output variables taken in the function entrypoint
+	*start_time = startp->start;
+	if (byte_count)
+		*byte_count = startp->count;
+	//u32 s_dev = startp->inode->i_sb->s_dev;
+	// delete the start from the map, no need for it
+	starts.delete(&pid);
+
+	struct info_t info = {
+		.pid = pid,
+		.tgid = bpf_get_current_pid_tgid() >> 32,
+		.uid = bpf_get_current_uid_gid(),
+		.sbdev = startp->inode->i_sb->s_dev,
+	};
+	bpf_get_current_comm(&info.comm, sizeof(info.comm));
+
+	struct stats_t zero = {};
+	return counts.lookup_or_try_init(&info, &zero);
+}
+
+static struct start_t *get()
+{
+	u32 pid = bpf_get_current_pid_tgid();
+	struct start_t zero = {};
+	return starts.lookup_or_try_init(&pid, &zero);
+}
+
+static int trace_nfs_function_entry(struct pt_regs *ctx,
+		struct inode *inode, u64 count)
+{
+	struct start_t *startp = get();
+	if (!startp)
+		return 0;
+
+	startp->start = bpf_ktime_get_ns();
+	startp->inode = inode;
+	startp->count = count;
+	return 0;
+}
+
 static int should_filter_file(struct file *file)
 {
 	struct dentry *de = file->f_path.dentry;
@@ -85,56 +140,34 @@ static int should_filter_file(struct file *file)
 	return 0;
 }
 
-static struct val_t *get()
-{
-	struct info_t info = {
-		.pid = bpf_get_current_pid_tgid(),
-		.tgid = bpf_get_current_pid_tgid() >> 32,
-		.uid = bpf_get_current_uid_gid(),
-	};
-	bpf_get_current_comm(&info.comm, sizeof(info.comm));
-
-	struct val_t zero = {};
-	return counts.lookup_or_try_init(&info, &zero);
-}
-
 static int file_read_write(struct pt_regs *ctx, struct file *file,
 		size_t count, int is_read)
 {
 	if (should_filter_file(file))
 		return 0;
 
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	if (is_read) {
-		valp->read.count++;
-		valp->rbytes += count;
-		valp->read.start = bpf_ktime_get_ns();
-	} else {
-		valp->write.count++;
-		valp->wbytes += count;
-		valp->write.start = bpf_ktime_get_ns();
-	}
-
-	return 0;
+	return trace_nfs_function_entry(ctx, file->f_inode, count);
 }
 
 static int file_read_write_ret(struct pt_regs *ctx, int is_read)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start, count;
+	struct stats_t *statsp = get_stats(&start, &count);
+	if (!statsp)
 		return 0;
 
 	if (is_read) {
+		statsp->read.count++;
+		statsp->rbytes += count;
 		if (PT_REGS_RC(ctx) < 0)
-			valp->read.errors++;
-		valp->read.duration += bpf_ktime_get_ns() - valp->read.start;
+			statsp->read.errors++;
+		statsp->read.duration += bpf_ktime_get_ns() - start;
 	} else {
+		statsp->write.count++;
+		statsp->wbytes += count;
 		if (PT_REGS_RC(ctx) < 0)
-			valp->write.errors++;
-		valp->write.duration += bpf_ktime_get_ns() - valp->write.start;
+			statsp->write.errors++;
+		statsp->write.duration += bpf_ktime_get_ns() - start;
 	}
 
 	return 0;
@@ -180,24 +213,20 @@ int trace_nfs_file_open(struct pt_regs *ctx, struct inode *inode,
 	if (should_filter_file(file))
 		return 0;
 
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->open.count++;
-	valp->open.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, inode, 0);
 }
 
 int trace_nfs_file_open_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->open.count++;
 	if (PT_REGS_RC(ctx))
-		valp->open.errors++;
-	valp->open.duration += bpf_ktime_get_ns() - valp->open.start;
+		statsp->open.errors++;
+	statsp->open.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
@@ -205,48 +234,40 @@ int trace_nfs_getattr(struct pt_regs *ctx, struct mnt_idmap *idmap,
 		const struct path *path, struct kstat *stat, u32 request_mask,
 		unsigned int query_flags)
 {
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->getattr.count++;
-	valp->getattr.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, path->dentry->d_inode, 0);
 }
 
 int trace_nfs_getattr_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->getattr.count++;
 	if (PT_REGS_RC(ctx))
-		valp->getattr.errors++;
-	valp->getattr.duration += bpf_ktime_get_ns() - valp->getattr.start;
+		statsp->getattr.errors++;
+	statsp->getattr.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
 int trace_nfs_setattr(struct pt_regs *ctx, struct mnt_idmap *idmap,
 		struct dentry *dentry, struct iattr *attr)
 {
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->setattr.count++;
-	valp->setattr.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
 }
 
 int trace_nfs_setattr_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->setattr.count++;
 	if (PT_REGS_RC(ctx))
-		valp->setattr.errors++;
-	valp->setattr.duration += bpf_ktime_get_ns() - valp->setattr.start;
+		statsp->setattr.errors++;
+	statsp->setattr.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
@@ -256,24 +277,20 @@ int trace_nfs_file_flush(struct pt_regs *ctx,
 	if (should_filter_file(file))
 		return 0;
 
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->flush.count++;
-	valp->flush.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, file->f_inode, 0);
 }
 
 int trace_nfs_file_flush_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->flush.count++;
 	if (PT_REGS_RC(ctx))
-		valp->flush.errors++;
-	valp->flush.duration += bpf_ktime_get_ns() - valp->flush.start;
+		statsp->flush.errors++;
+	statsp->flush.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
@@ -283,24 +300,20 @@ int trace_nfs_file_fsync(struct pt_regs *ctx,
 	if (should_filter_file(file))
 		return 0;
 
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->fsync.count++;
-	valp->fsync.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, file->f_inode, 0);
 }
 
 int trace_nfs_file_fsync_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->fsync.count++;
 	if (PT_REGS_RC(ctx))
-		valp->fsync.errors++;
-	valp->fsync.duration += bpf_ktime_get_ns() - valp->fsync.start;
+		statsp->fsync.errors++;
+	statsp->fsync.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
@@ -310,24 +323,20 @@ int trace_nfs_lock(struct pt_regs *ctx, struct file *file,
 	if (should_filter_file(file))
 		return 0;
 
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->lock.count++;
-	valp->lock.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, file->f_inode, 0);
 }
 
 int trace_nfs_lock_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->lock.count++;
 	if (PT_REGS_RC(ctx))
-		valp->lock.errors++;
-	valp->lock.duration += bpf_ktime_get_ns() - valp->lock.start;
+		statsp->lock.errors++;
+	statsp->lock.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
@@ -337,24 +346,20 @@ int trace_nfs_file_mmap(struct pt_regs *ctx, struct file *file,
 	if (should_filter_file(file))
 		return 0;
 
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->mmap.count++;
-	valp->mmap.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, file->f_inode, 0);
 }
 
 int trace_nfs_file_mmap_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->mmap.count++;
 	if (PT_REGS_RC(ctx))
-		valp->mmap.errors++;
-	valp->mmap.duration += bpf_ktime_get_ns() - valp->mmap.start;
+		statsp->mmap.errors++;
+	statsp->mmap.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
@@ -364,24 +369,20 @@ int trace_nfs_file_release(struct pt_regs *ctx, struct inode *inode,
 	if (should_filter_file(file))
 		return 0;
 
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->close.count++;
-	valp->close.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, file->f_inode, 0);
 }
 
 int trace_nfs_file_release_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->close.count++;
 	if (PT_REGS_RC(ctx))
-		valp->close.errors++;
-	valp->close.duration += bpf_ktime_get_ns() - valp->close.start;
+		statsp->close.errors++;
+	statsp->close.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
@@ -391,143 +392,119 @@ int trace_nfs_readdir(struct pt_regs *ctx, struct file *file,
 	if (should_filter_file(file))
 		return 0;
 
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->readdir.count++;
-	valp->readdir.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, file->f_inode, 0);
 }
 
 int trace_nfs_readdir_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->readdir.count++;
 	if (PT_REGS_RC(ctx))
-		valp->readdir.errors++;
-	valp->readdir.duration += bpf_ktime_get_ns() - valp->readdir.start;
+		statsp->readdir.errors++;
+	statsp->readdir.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
 int trace_nfs_create(struct pt_regs *ctx, struct mnt_idmap *idmap,
 		struct inode *dir, struct dentry *dentry, umode_t mode, bool excl)
 {
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->create.count++;
-	valp->create.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
 }
 
 int trace_nfs_create_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->create.count++;
 	if (PT_REGS_RC(ctx))
-		valp->create.errors++;
-	valp->create.duration += bpf_ktime_get_ns() - valp->create.start;
+		statsp->create.errors++;
+	statsp->create.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
 int trace_nfs_link(struct pt_regs *ctx, struct dentry *old_dentry,
 		struct inode *dir, struct dentry *dentry)
 {
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->link.count++;
-	valp->link.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
 }
 
 int trace_nfs_link_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->link.count++;
 	if (PT_REGS_RC(ctx))
-		valp->link.errors++;
-	valp->link.duration += bpf_ktime_get_ns() - valp->link.start;
+		statsp->link.errors++;
+	statsp->link.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
 int trace_nfs_unlink(struct pt_regs *ctx, struct inode *dir, struct dentry *dentry)
 {
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->unlink.count++;
-	valp->unlink.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
 }
 
 int trace_nfs_unlink_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->unlink.count++;
 	if (PT_REGS_RC(ctx))
-		valp->unlink.errors++;
-	valp->unlink.duration += bpf_ktime_get_ns() - valp->unlink.start;
+		statsp->unlink.errors++;
+	statsp->unlink.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
 int trace_nfs_symlink(struct pt_regs *ctx, struct mnt_idmap *idmap,
 		struct inode *dir, struct dentry *dentry, const char *symname)
 {
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->symlink.count++;
-	valp->symlink.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
 }
 
 int trace_nfs_symlink_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->symlink.count++;
 	if (PT_REGS_RC(ctx))
-		valp->symlink.errors++;
-	valp->symlink.duration += bpf_ktime_get_ns() - valp->symlink.start;
+		statsp->symlink.errors++;
+	statsp->symlink.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
 int trace_nfs_lookup(struct pt_regs *ctx, struct inode *dir,
 		struct dentry * dentry, unsigned int flags)
 {
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->lookup.count++;
-	valp->lookup.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
 }
 
 int trace_nfs_lookup_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->lookup.count++;
 	if (PT_REGS_RC(ctx))
-		valp->lookup.errors++;
-	valp->lookup.duration += bpf_ktime_get_ns() - valp->lookup.start;
+		statsp->lookup.errors++;
+	statsp->lookup.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
@@ -535,68 +512,58 @@ int trace_nfs_rename(struct pt_regs *ctx,  struct mnt_idmap *idmap, struct inode
 			   struct dentry *old_dentry, struct inode *new_dir,
 			   struct dentry *new_dentry, unsigned int flags)
 {
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-	valp->rename.count++;
-	valp->rename.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, new_dentry->d_inode, 0);
 }
 
 int trace_nfs_rename_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->rename.count++;
 	if (PT_REGS_RC(ctx))
-		valp->rename.errors++;
-	valp->rename.duration += bpf_ktime_get_ns() - valp->rename.start;
+		statsp->rename.errors++;
+	statsp->rename.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
 int trace_nfs_do_access(struct pt_regs *ctx, struct inode *inode, const struct cred *cred, int mask)
 {
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-	valp->access.count++;
-	valp->access.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, inode, 0);
 }
 
 int trace_nfs_do_access_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->access.count++;
 	if (PT_REGS_RC(ctx))
-		valp->access.errors++;
-	valp->access.duration += bpf_ktime_get_ns() - valp->access.start;
+		statsp->access.errors++;
+	statsp->access.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
 
 
 int trace_nfs_listxattrs(struct pt_regs *ctx, struct dentry *dentry, char *list, size_t size)
 {
-	struct val_t *valp = get();
-	if (!valp)
-		return 0;
-
-	valp->listxattr.count++;
-	valp->listxattr.start = bpf_ktime_get_ns();
-	return 0;
+	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
 }
 
 int trace_nfs_listxattrs_ret(struct pt_regs *ctx)
 {
-	struct val_t *valp = get();
-	if (!valp)
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
 		return 0;
 
+	statsp->listxattr.count++;
 	if (PT_REGS_RC(ctx))
-		valp->listxattr.errors++;
-	valp->listxattr.duration += bpf_ktime_get_ns() - valp->listxattr.start;
+		statsp->listxattr.errors++;
+	statsp->listxattr.duration += bpf_ktime_get_ns() - start;
 	return 0;
 }
