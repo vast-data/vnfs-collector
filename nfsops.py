@@ -15,69 +15,69 @@ from bcc import BPF
 os.environ['PROMETHEUS_DISABLE_CREATED_SERIES'] = "1"
 import prometheus_client as prom
 from prometheus_client.registry import Collector
-from prometheus_client.core import GaugeMetricFamily, Summary, Counter, CounterMetricFamily
+from prometheus_client.core import GaugeMetricFamily
 
-STATKEYS = [
-    "OPEN_COUNT",
-    "OPEN_ERRORS",      
-    "OPEN_DURATION",
-    "CLOSE_COUNT",
-    "CLOSE_ERRORS",
-    "CLOSE_DURATION",
-    "READ_COUNT",
-    "READ_ERRORS",
-    "READ_DURATION",
-    "READ_BYTES",
-    "WRITE_COUNT",
-    "WRITE_ERRORS",
-    "WRITE_DURATION",
-    "WRITE_BYTES",
-    "GETATTR_COUNT",
-    "GETATTR_ERRORS",
-    "GETATTR_DURATION",
-    "SETATTR_COUNT",
-    "SETATTR_ERRORS",
-    "SETATTR_DURATION",
-    "FLUSH_COUNT",
-    "FLUSH_ERRORS",
-    "FLUSH_DURATION",
-    "FSYNC_COUNT",
-    "FSYNC_ERRORS",
-    "FSYNC_DURATION",
-    "LOCK_COUNT",
-    "LOCK_ERRORS",
-    "LOCK_DURATION",
-    "MMAP_COUNT",
-    "MMAP_ERRORS",
-    "MMAP_DURATION",
-    "READDIR_COUNT",
-    "READDIR_ERRORS",
-    "READDIR_DURATION",
-    "CREATE_COUNT",
-    "CREATE_ERRORS",
-    "CREATE_DURATION",
-    "LINK_COUNT",
-    "LINK_ERRORS",
-    "LINK_DURATION",
-    "UNLINK_COUNT",
-    "UNLINK_ERRORS",
-    "UNLINK_DURATION",
-    "SYMLINK_COUNT",
-    "SYMLINK_ERRORS",
-    "SYMLINK_DURATION",
-    "LOOKUP_COUNT",
-    "LOOKUP_ERRORS",
-    "LOOKUP_DURATION",
-    "RENAME_COUNT",
-    "RENAME_ERRORS",
-    "RENAME_DURATION",
-    "ACCESS_COUNT",
-    "ACCESS_ERRORS",
-    "ACCESS_DURATION",
-    "LISTXATTR_COUNT",
-    "LISTXATTR_ERRORS",
-    "LISTXATTR_DURATION",
-]
+STATKEYS = {
+        "OPEN_COUNT":       "Number of NFS OPEN calls",
+        "OPEN_ERRORS":      "Number of NFS OPEN errors",
+        "OPEN_DURATION":    "Total NFS OPEN duration (in seconds)",
+        "CLOSE_COUNT":      "Number of NFS CLOSE calls",
+        "CLOSE_ERRORS":     "Number of NFS CLOSE errors",
+        "CLOSE_DURATION":   "Total NFS CLOSE duration (in seconds)",
+        "READ_COUNT":       "Number of NFS READ calls",
+        "READ_ERRORS":      "Number of NFS READ errors",
+        "READ_DURATION":    "Total NFS READ duration (in seconds)",
+        "READ_BYTES":       "Total NFS READ bytes",
+        "WRITE_COUNT":      "Number of NFS WRITE calls",
+        "WRITE_ERRORS":     "Number of NFS WRITE errors",
+        "WRITE_DURATION":   "Total NFS WRITE duration (in seconds)",
+        "WRITE_BYTES":      "Total NFS WRITE bytes",
+        "GETATTR_COUNT":    "Number of NFS GETATTR calls",
+        "GETATTR_ERRORS":   "Number of NFS GETATTR errors",
+        "GETATTR_DURATION": "Total NFS GETATTR duration (in seconds)",
+        "SETATTR_COUNT":    "Number of NFS SETATTR calls",
+        "SETATTR_ERRORS":   "Number of NFS SETATTR errors",
+        "SETATTR_DURATION": "Total NFS SETATTR duration (in seconds)",
+        "FLUSH_COUNT":      "Number of NFS FLUSH calls",
+        "FLUSH_ERRORS":     "Number of NFS FLUSH errors",
+        "FLUSH_DURATION":   "Total NFS FLUSH duration (in seconds)",
+        "FSYNC_COUNT":      "Number of NFS FSYNC calls",
+        "FSYNC_ERRORS":     "Number of NFS FSYNC errors",
+        "FSYNC_DURATION":   "Total NFS FSYNC duration (in seconds)",
+        "LOCK_COUNT":       "Number of NFS LOCK calls",
+        "LOCK_ERRORS":      "Number of NFS LOCK errors",
+        "LOCK_DURATION":    "Total NFS LOCK duration (in seconds)",
+        "MMAP_COUNT":       "Number of NFS MMAP calls",
+        "MMAP_ERRORS":      "Number of NFS MMAP errors",
+        "MMAP_DURATION":    "Total NFS MMAP duration (in seconds)",
+        "READDIR_COUNT":    "Number of NFS READDIR calls",
+        "READDIR_ERRORS":   "Number of NFS READDIR errors",
+        "READDIR_DURATION": "Total NFS READDIR duration (in seconds)",
+        "CREATE_COUNT":     "Number of NFS CREATE calls",
+        "CREATE_ERRORS":    "Number of NFS CREATE errors",
+        "CREATE_DURATION":  "Total NFS CREATE duration (in seconds)",
+        "LINK_COUNT":       "Number of NFS LINK calls",
+        "LINK_ERRORS":      "Number of NFS LINK errors",
+        "LINK_DURATION":    "Total NFS LINK duration (in seconds)",
+        "UNLINK_COUNT":     "Number of NFS UNLINK calls",
+        "UNLINK_ERRORS":    "Number of NFS UNLINK errors",
+        "UNLINK_DURATION":  "Total NFS UNLINK duration (in seconds)",
+        "SYMLINK_COUNT":    "Number of NFS SYMLINK calls",
+        "SYMLINK_ERRORS":   "Number of NFS SYMLINK errors",
+        "SYMLINK_DURATION": "Total NFS SYMLINK duration (in seconds)",
+        "LOOKUP_COUNT":     "Number of NFS LOOKUP calls",
+        "LOOKUP_ERRORS":    "Number of NFS LOOKUP errors",
+        "LOOKUP_DURATION":  "Total NFS LOOKUP duration (in seconds)",
+        "RENAME_COUNT":     "Number of NFS RENAME calls",
+        "RENAME_ERRORS":    "Number of NFS RENAME errors",
+        "RENAME_DURATION":  "Total NFS RENAME duration (in seconds)",
+        "ACCESS_COUNT":     "Number of NFS ACCESS calls",
+        "ACCESS_ERRORS":    "Number of NFS ACCESS errors",
+        "ACCESS_DURATION":  "Total NFS ACCESS duration (in seconds)",
+        "LISTXATTR_COUNT":  "Number of NFS LISTXATTR calls",
+        "LISTXATTR_ERRORS": "Number of NFS LISTXATTR errors",
+        "LISTXATTR_DURATION": "Total NFS LISTXATTR duration (in seconds)",
+}
 
 class MountsMap:
     def __init__(self):
@@ -288,7 +288,7 @@ class StatsCollector:
         return stat["PID"] == new["PID"] and stat["MOUNT"] == new["MOUNT"]
 
     def combine_stat(self, stat, new):
-        for key in STATKEYS:
+        for key in STATKEYS.keys():
             stat[key] += new[key]
 
     def collect_stats(self):
@@ -395,15 +395,9 @@ class StatsCollector:
 class PromCollector(Collector):
     def __init__(self, StatsCollector):
         self.collector = StatsCollector
-        self.gauges = {}
 
     def _create_gauge(self, name, help_text, labels, value):
-        gauge = None
-        if name in self.gauges.keys():
-                gauge = self.gauges[name]
-        else:
-            gauge = GaugeMetricFamily(name, help_text, labels=labels.keys())
-            self.gauges[name] = gauge
+        gauge = GaugeMetricFamily(name, help_text, labels=labels.keys())
         gauge.add_metric(labels.values(), value)
         return gauge
 
@@ -414,6 +408,7 @@ class PromCollector(Collector):
                 "HOSTNAME": stat["HOSTNAME"],
                 "UID": str(stat["UID"]),
                 "COMM": stat["COMM"],
+                "MOUNT": stat["MOUNT"],
             }
             if args.envs:
                 for env in args.envs:
@@ -421,12 +416,13 @@ class PromCollector(Collector):
                         labels_kwargs.update({env: stat["TAGS"][env]})
                     except:
                         labels_kwargs.update({env: ""})
-        for stat in statistics:
-            for s in STATKEYS:
-                yield self._create_gauge(s, "", labels_kwargs, stat[s])
+            for s in STATKEYS.keys():
+                if "DURATION" in s: # adjust duration samples to seconds
+                    stat[s] = stat[s] / 1000000000
+                yield self._create_gauge(s, STATKEYS[s], labels_kwargs, stat[s])
 
 
-class PrometheusCollector(StatsCollector):
+class PrometheusExporter(StatsCollector):
     """
     Tracer traps pid execution and collects the existance of the tracked
     environment variables.
@@ -434,51 +430,21 @@ class PrometheusCollector(StatsCollector):
     def __init__(self, bpf, PidEnvMap, OutputTarget, port=9000, interval=60):
         super().__init__(bpf, PidEnvMap, OutputTarget, interval)
         self.port = port
-        self.gauges = {}
         self.collector = PromCollector(self)
 
-    def define_prom_counters(self, labels):
-        for statkey in STATKEYS:
-            self.gauges[statkey] = GaugeMetricFamily(statkey, "", labels)
-            #import ipdb; ipdb.set_trace()
 
     def start(self):
         prom.REGISTRY.unregister(prom.PROCESS_COLLECTOR)
         prom.REGISTRY.unregister(prom.PLATFORM_COLLECTOR)
         prom.REGISTRY.unregister(prom.GC_COLLECTOR)
         prom.REGISTRY.register(self.collector)
-        labels = ["HOSTNAME", "UID", "COMM"]
-        if args.envs:
-            labels += args.envs
-        self.define_prom_counters(labels)
-        prom.start_http_server(self.port)
+        prom.start_http_server(port=self.port, addr="::")
 
     def stat_match(self, stat, new):
         return stat["COMM"] == new["COMM"] and  \
                 stat["TAGS"] == new["TAGS"] and \
                 stat["MOUNT"] == new["MOUNT"]
 
-    def update_prom_stats(self, statistics):
-        for stat in statistics:
-            labels_kwargs = {
-                "HOSTNAME": stat["HOSTNAME"],
-                "UID": stat["UID"],
-                "COMM": stat["COMM"],
-            }
-            if args.envs:
-                for env in args.envs:
-                    try:
-                        labels_kwargs.update({env: stat["TAGS"][env]})
-                    except:
-                        labels_kwargs.update({env: ""})
-        for stat in statistics:
-            for s in STATKEYS:
-                self.counters[s].labels(**labels_kwargs).inc(stat[s])
-
-    def poll_stats(self):
-            statistics = self.collect_stats()
-            self.update_prom_stats(statistics)
-            self.output_target.output(statistics)
 
 def split_list(values):
     return values.split(',')
@@ -498,6 +464,7 @@ if __name__ == "__main__":
         ./nfsops.py -v 700                  # Vaccume every 700 seconds
         ./nfsops.py -e JOBID,SCHEDID        # Decorate samples with env variables JOBID and SCHEDID
         ./nfsops.py --ebpf                  # dump ebpf program text and exit
+        ./nfsops.py -P                      # start a prometheus endpoint (default address is [::]:<port>
     """
     parser = argparse.ArgumentParser(
         description="Track NFS statistics by process",
@@ -513,9 +480,9 @@ if __name__ == "__main__":
             help="enable debug prints")
     parser.add_argument("--ebpf", action="store_true",
             help="dump BPF program text and exit")
-    parser.add_argument("--prometheus", action="store_true",
+    parser.add_argument("-P", "--prometheus", action="store_true",
             help="start a prometheus exporter")
-    parser.add_argument("--prometheus-port", default=9000,
+    parser.add_argument("-p", "--prometheus-port", default=9000,
             help="start a prometheus exporter")
     parser.add_argument("-o", "--output", choices=["screen"],
             default="screen", help="samples output target")
@@ -547,7 +514,7 @@ if __name__ == "__main__":
     if args.output == "screen":
         output = ScreenOutputTarget()
     if args.prometheus:
-        collector = PrometheusCollector(bpf=bpf, PidEnvMap=pidEnvMap,
+        collector = PrometheusExporter(bpf=bpf, PidEnvMap=pidEnvMap,
                                 OutputTarget=output, interval=args.interval)
     else:
         collector = StatsCollector(bpf=bpf, PidEnvMap=pidEnvMap,
@@ -555,7 +522,6 @@ if __name__ == "__main__":
     collector.attach()
     collector.start()
 
-    print('Tracing... Output every %d secs...' % args.interval)
     while True:
         try:
             sleep(args.interval)
