@@ -79,6 +79,9 @@ STATKEYS = {
         "LISTXATTR_DURATION": "Total NFS LISTXATTR duration (in seconds)",
 }
 
+def nstosec(val_in_ns):
+    return float(val_in_ns) / 1000000000
+
 class MountsMap:
     def __init__(self):
         self.map = {}
@@ -308,63 +311,63 @@ class StatsCollector:
                     "COMM":             k.comm.decode('utf-8', 'replace'),
                     "OPEN_COUNT":       v.open.count,
                     "OPEN_ERRORS":      v.open.errors,
-                    "OPEN_DURATION":    v.open.duration,
+                    "OPEN_DURATION":    nstosec(v.open.duration),
                     "CLOSE_COUNT":      v.close.count,
                     "CLOSE_ERRORS":     v.close.errors,
-                    "CLOSE_DURATION":   v.close.duration,
+                    "CLOSE_DURATION":   nstosec(v.close.duration),
                     "READ_COUNT":       v.read.count,
                     "READ_ERRORS":      v.read.errors,
-                    "READ_DURATION":    v.read.duration,
+                    "READ_DURATION":    nstosec(v.read.duration),
                     "READ_BYTES":       v.rbytes,
                     "WRITE_COUNT":      v.write.count,
                     "WRITE_ERRORS":     v.write.errors,
-                    "WRITE_DURATION":   v.write.duration,
+                    "WRITE_DURATION":   nstosec(v.write.duration),
                     "WRITE_BYTES":      v.wbytes,
                     "GETATTR_COUNT":    v.getattr.count,
                     "GETATTR_ERRORS":   v.getattr.errors,
-                    "GETATTR_DURATION": v.getattr.duration,
+                    "GETATTR_DURATION": nstosec(v.getattr.duration),
                     "SETATTR_COUNT":    v.setattr.count,
                     "SETATTR_ERRORS":   v.setattr.errors,
-                    "SETATTR_DURATION": v.setattr.duration,
+                    "SETATTR_DURATION": nstosec(v.setattr.duration),
                     "FLUSH_COUNT":      v.flush.count,
                     "FLUSH_ERRORS":     v.flush.errors,
-                    "FLUSH_DURATION":   v.flush.duration,
+                    "FLUSH_DURATION":   nstosec(v.flush.duration),
                     "FSYNC_COUNT":      v.fsync.count,
                     "FSYNC_ERRORS":     v.fsync.errors,
-                    "FSYNC_DURATION":   v.fsync.duration,
+                    "FSYNC_DURATION":   nstosec(v.fsync.duration),
                     "LOCK_COUNT":       v.lock.count,
                     "LOCK_ERRORS":      v.lock.errors,
-                    "LOCK_DURATION":    v.lock.duration,
+                    "LOCK_DURATION":    nstosec(v.lock.duration),
                     "MMAP_COUNT":       v.mmap.count,
                     "MMAP_ERRORS":      v.mmap.errors,
-                    "MMAP_DURATION":    v.mmap.duration,
+                    "MMAP_DURATION":    nstosec(v.mmap.duration),
                     "READDIR_COUNT":    v.readdir.count,
                     "READDIR_ERRORS":   v.readdir.errors,
-                    "READDIR_DURATION": v.readdir.duration,
+                    "READDIR_DURATION": nstosec(v.readdir.duration),
                     "CREATE_COUNT":     v.create.count,
                     "CREATE_ERRORS":    v.create.errors,
-                    "CREATE_DURATION":  v.create.duration,
+                    "CREATE_DURATION":  nstosec(v.create.duration),
                     "LINK_COUNT":       v.link.count,
                     "LINK_ERRORS":      v.link.errors,
-                    "LINK_DURATION":    v.link.duration,
+                    "LINK_DURATION":    nstosec(v.link.duration),
                     "UNLINK_COUNT":     v.unlink.count,
                     "UNLINK_ERRORS":    v.unlink.errors,
-                    "UNLINK_DURATION":  v.unlink.duration,
+                    "UNLINK_DURATION":  nstosec(v.unlink.duration),
                     "SYMLINK_COUNT":    v.symlink.count,
                     "SYMLINK_ERRORS":   v.symlink.errors,
-                    "SYMLINK_DURATION": v.symlink.duration,
+                    "SYMLINK_DURATION": nstosec(v.symlink.duration),
                     "LOOKUP_COUNT":     v.lookup.count,
                     "LOOKUP_ERRORS":    v.lookup.errors,
-                    "LOOKUP_DURATION":  v.lookup.duration,
+                    "LOOKUP_DURATION":  nstosec(v.lookup.duration),
                     "RENAME_COUNT":     v.rename.count,
                     "RENAME_ERRORS":    v.rename.errors,
-                    "RENAME_DURATION":  v.rename.duration,
+                    "RENAME_DURATION":  nstosec(v.rename.duration),
                     "ACCESS_COUNT":     v.access.count,
                     "ACCESS_ERRORS":    v.access.errors,
-                    "ACCESS_DURATION":  v.access.duration,
+                    "ACCESS_DURATION":  nstosec(v.access.duration),
                     "LISTXATTR_COUNT":  v.listxattr.count,
                     "LISTXATTR_ERRORS": v.listxattr.errors,
-                    "LISTXATTR_DURATION":v.listxattr.duration,
+                    "LISTXATTR_DURATION":nstosec(v.listxattr.duration),
                     "TAGS":         self.PidEnvMap.get(k.tgid),
                     "MOUNT":        mountsMap.get_mountpoint(k.sbdev),
             }
@@ -419,8 +422,6 @@ class PromCollector(Collector):
                     except:
                         labels_kwargs.update({env: ""})
             for s in STATKEYS.keys():
-                if "DURATION" in s: # adjust duration samples to seconds
-                    stat[s] = stat[s] / 1000000000
                 yield self._create_gauge(s, STATKEYS[s], labels_kwargs, stat[s])
 
 
