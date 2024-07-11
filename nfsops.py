@@ -86,6 +86,8 @@ class MountsMap:
 
     def refresh_map(self):
         mountmap = {}
+        if not Path("/sys/fs/nfs").exists():
+            return
         for f in os.listdir("/sys/fs/nfs"):
             if f == "net":
                 continue
@@ -499,8 +501,10 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, sighandler)
     signal.signal(signal.SIGINT, sighandler)
 
-    # initialize BPF
+    # probe needed modules (nfsv4 autoloads nfs)
     os.system("/usr/sbin/modprobe kheaders")
+    os.system("/usr/sbin/modprobe nfsv4")
+    # initialize BPF
     bpf = BPF(text=bpf_text)
 
     pidEnvMap = PidEnvMap(vaccum_interval=args.vaccum)
