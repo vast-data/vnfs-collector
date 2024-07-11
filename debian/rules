@@ -1,0 +1,32 @@
+#!/usr/bin/make -f
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+#DH_VERBOSE = 1
+
+# see FEATURE AREAS in dpkg-buildflags(1)
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# see ENVIRONMENT in dpkg-buildflags(1)
+# package maintainers to append CFLAGS
+#export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+# package maintainers to append LDFLAGS
+#export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+pname:=client-metrics
+install_path=$(CURDIR)/debian/$(pname)
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+
+override_dh_auto_configure:
+
+override_dh_auto_build:
+
+override_dh_auto_install:
+	mkdir -p $(install_path)/opt/$(pname)
+	mkdir -p $(install_path)/etc/systemd/system
+	install -m 775 $(CURDIR)/nfsops.c $(install_path)/opt/$(pname)/
+	install -m 775 $(CURDIR)/nfsops.py $(install_path)/opt/$(pname)/
+	install -m 775 $(CURDIR)/systemd/$(pname).service $(install_path)/etc/systemd/system/
