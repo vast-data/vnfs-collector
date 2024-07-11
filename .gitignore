@@ -1,0 +1,5 @@
+dist
+*.substvars
+*debhelper*
+debian/files
+debian/client-metrics*
