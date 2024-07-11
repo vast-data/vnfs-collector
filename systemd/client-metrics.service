@@ -1,0 +1,16 @@
+[Unit]
+Description=NFS Collector tracking per application/mount stats using ebpf
+#ConditionPathExists=|/opt/client-metrics/config.json 
+Wants=modprobe@kheaders.service modprobe@nfsv4.service
+After=modprobe@kheaders.service modprobe@nfsv4.service
+After=network-online.target
+
+[Service]
+Type=idle
+Restart=on-failure
+User=root
+WorkingDirectory=/opt/client-metrics
+ExecStart=/opt/client-metrics/nfsops.py
+
+[Install]
+WantedBy=multi-user.target
