@@ -2,4 +2,4 @@ dist
 *.substvars
 *debhelper*
 debian/files
-debian/client-metrics*
+debian/vnfs-collector*

@@ -8,13 +8,13 @@ distdir:
 	@mkdir -p dist
 
 rpm: distdir
-	rpmbuild -bb client-metrics.spec --define "_sourcedir `pwd`"
-	@mv ~/rpmbuild/RPMS/noarch/client-metrics*.rpm dist/
+	rpmbuild -bb vnfs-collector.spec --define "_sourcedir `pwd`"
+	@mv ~/rpmbuild/RPMS/noarch/vnfs-collector*.rpm dist/
 
 deb: distdir
 	dpkg-buildpackage -b -us -uc
-	@mv ../client-metrics*.deb dist/
-	@rm -f ../client-metrics*.buildinfo ../client-metrics*.changes
+	@mv ../vnfs-collector*.deb dist/
+	@rm -f ../vnfs-collector*.buildinfo ../vnfs-collector*.changes
 
 clean:
 	@rm -rf dist/

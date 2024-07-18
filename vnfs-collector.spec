@@ -1,10 +1,10 @@
-Name:           client-metrics
+Name:           vnfs-collector
 Version:        0.0.1
 Release:        1%{?dist}
 Summary:        NFS metrics collector based on ebpf
 BuildArch:      noarch
 License:        GPL
-Provides:       client-metrics
+Provides:       vnfs-collector
 Requires:       python3 python3-bcc python3-psutil python3-prometheus-client
 Requires(post): systemd
 
@@ -15,17 +15,17 @@ prometheus and more as well outputing to a local log file or stdout.
 
 %install
 rm -rf %{buildroot}
-mkdir -p %{buildroot}/opt/client-metrics
-install -m 0755 %{_sourcedir}/nfsops.py %{_sourcedir}/nfsops.c %{buildroot}/opt/client-metrics/
+mkdir -p %{buildroot}/opt/vnfs-collector
+install -m 0755 %{_sourcedir}/nfsops.py %{_sourcedir}/nfsops.c %{buildroot}/opt/vnfs-collector/
 mkdir -p %{buildroot}/etc/systemd/system/
-install -m 0755 %{_sourcedir}/systemd/client-metrics.service %{buildroot}/etc/systemd/system
+install -m 0755 %{_sourcedir}/systemd/vnfs-collector.service %{buildroot}/etc/systemd/system
 
 %files
-%dir /opt/client-metrics
-%ghost /opt/client-metrics/config.json
-/opt/client-metrics/nfsops.py
-/opt/client-metrics/nfsops.c
-/etc/systemd/system/client-metrics.service
+%dir /opt/vnfs-collector
+%ghost /opt/vnfs-collector/config.json
+/opt/vnfs-collector/nfsops.py
+/opt/vnfs-collector/nfsops.c
+/etc/systemd/system/vnfs-collector.service
 
 %post
 if [ $1 -eq 1 ]; then # 1 : This package is being installed for the first time
