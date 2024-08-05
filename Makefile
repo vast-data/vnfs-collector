@@ -14,7 +14,7 @@ rpm: distdir
 deb: distdir
 	dpkg-buildpackage -b -us -uc
 	@mv ../vnfs-collector*.deb dist/
-	@rm -f ../vnfs-collector*.buildinfo ../vnfs-collector*.changes
+	@mv ../vnfs-collector*.buildinfo ../vnfs-collector*.changes dist/
 
 clean:
 	@rm -rf dist/
