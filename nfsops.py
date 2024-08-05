@@ -6,7 +6,7 @@
 #
 # uses in-kernel eBPF maps to store per process summaries for efficiency.
 
-import os, argparse, signal, psutil
+import os, argparse, signal, psutil, yaml
 from threading import Thread
 from time import sleep
 from datetime import datetime
@@ -20,6 +20,7 @@ except:
     from prometheus_client.registry import CollectorRegistry as Collector
 from prometheus_client.core import GaugeMetricFamily
 
+CFG_FILE="/opt/vnfs-collector/nfsops.yaml"
 STATKEYS = {
         "OPEN_COUNT":       "Number of NFS OPEN calls",
         "OPEN_ERRORS":      "Number of NFS OPEN errors",
@@ -470,7 +471,7 @@ if __name__ == "__main__":
         ./nfsops.py -v 700                  # Vaccume every 700 seconds
         ./nfsops.py -e JOBID,SCHEDID        # Decorate samples with env variables JOBID and SCHEDID
         ./nfsops.py --ebpf                  # dump ebpf program text and exit
-        ./nfsops.py -P                      # start a prometheus endpoint (default address is [::]:<port>
+        ./nfsops.py -P                      # start a prometheus endpoint (default address is [::]:<port>)
     """
     parser = argparse.ArgumentParser(
         description="Track NFS statistics by process",
@@ -489,10 +490,19 @@ if __name__ == "__main__":
     parser.add_argument("-P", "--prometheus", action="store_true",
             help="start a prometheus exporter")
     parser.add_argument("-p", "--prometheus-port", default=9000,
-            help="start a prometheus exporter")
+            help="prometheus exporter port")
     parser.add_argument("-o", "--output", choices=["screen"],
             default="screen", help="samples output target")
+    parser.add_argument("-C", "--cfg", default=CFG_FILE,
+            help="config yaml (defaults to {})".format(CFG_FILE))
     args = parser.parse_args()
+    try:
+        with open(args.cfg, 'r') as f:
+            cfg_opts = yaml.safe_load(f)
+            if cfg_opts:
+                args = parser.parse_args(namespace=argparse.Namespace(**cfg_opts))
+    except:
+        pass
     debug=args.debug
 
     # read BPF program text
