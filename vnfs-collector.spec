@@ -17,7 +17,7 @@ prometheus and more as well outputing to a local log file or stdout.
 rm -rf %{buildroot}
 mkdir -p %{buildroot}/opt/vnfs-collector
 install -m 0755 %{_sourcedir}/nfsops.py %{_sourcedir}/nfsops.c %{buildroot}/opt/vnfs-collector/
-install -m 0555 %{_sourcedir}/nfsops.yaml %{buildroot}/opt/vnfs-collector/
+install -m 0644 %{_sourcedir}/nfsops.yaml %{buildroot}/opt/vnfs-collector/
 mkdir -p %{buildroot}/etc/systemd/system/
 install -m 0755 %{_sourcedir}/systemd/vnfs-collector.service %{buildroot}/etc/systemd/system
 

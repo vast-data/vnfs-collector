@@ -27,7 +27,7 @@ override_dh_auto_build:
 override_dh_auto_install:
 	mkdir -p $(install_path)/opt/$(pname)
 	mkdir -p $(install_path)/etc/systemd/system
-	install -m 775 $(CURDIR)/nfsops.c $(install_path)/opt/$(pname)/
-	install -m 775 $(CURDIR)/nfsops.py $(install_path)/opt/$(pname)/
-	install -m 555 $(CURDIR)/nfsops.yaml $(install_path)/opt/$(pname)/
-	install -m 775 $(CURDIR)/systemd/$(pname).service $(install_path)/etc/systemd/system/
+	install -m 755 $(CURDIR)/nfsops.c $(install_path)/opt/$(pname)/
+	install -m 755 $(CURDIR)/nfsops.py $(install_path)/opt/$(pname)/
+	install -m 644 $(CURDIR)/nfsops.yaml $(install_path)/opt/$(pname)/
+	install -m 755 $(CURDIR)/systemd/$(pname).service $(install_path)/etc/systemd/system/
