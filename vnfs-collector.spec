@@ -5,7 +5,7 @@ Summary:        NFS metrics collector based on ebpf
 BuildArch:      noarch
 License:        GPL
 Provides:       vnfs-collector
-Requires:       python3 python3-bcc python3-psutil python3-prometheus-client
+Requires:       python3 python3-bcc python3-psutil python3-prometheus_client
 Requires(post): systemd
 
 %description
