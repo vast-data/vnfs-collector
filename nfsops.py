@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # @lint-avoid-python-3-compatibility-imports
 #
 # nfsops:  Track NFS operations by process.
@@ -14,7 +14,10 @@ from pathlib import Path
 from bcc import BPF
 os.environ['PROMETHEUS_DISABLE_CREATED_SERIES'] = "1"
 import prometheus_client as prom
-from prometheus_client.registry import Collector
+try:
+    from prometheus_client.registry import Collector
+except:
+    from prometheus_client.registry import CollectorRegistry as Collector
 from prometheus_client.core import GaugeMetricFamily
 
 STATKEYS = {
