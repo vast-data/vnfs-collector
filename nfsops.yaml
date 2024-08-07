@@ -1,0 +1,9 @@
+# yaml format of nfsops input arguments here
+# for example:
+# ---
+# output: "logfile"
+# envs:
+# - JOBID
+# - SCHEDID
+# - POD_NAME
+# prometheus_port: 9000
