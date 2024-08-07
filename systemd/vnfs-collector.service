@@ -1,6 +1,6 @@
 [Unit]
 Description=NFS Collector tracking per application/mount stats using ebpf
-#ConditionPathExists=|/opt/vnfs-collector/config.json 
+ConditionPathExists=|/opt/vnfs-collector/nfsops.yaml
 Wants=modprobe@kheaders.service modprobe@nfsv4.service
 After=modprobe@kheaders.service modprobe@nfsv4.service
 After=network-online.target
