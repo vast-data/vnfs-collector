@@ -10,7 +10,7 @@ Type=idle
 Restart=on-failure
 User=root
 WorkingDirectory=/opt/vnfs-collector
-ExecStart=/usr/local/bin/vnfs -C /opt/vnfs-collector/nfsops.yaml
+ExecStart=/usr/local/bin/vnfs-collector -C /opt/vnfs-collector/nfsops.yaml
 
 [Install]
 WantedBy=multi-user.target

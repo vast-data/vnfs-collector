@@ -13,8 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 from setuptools import setup, find_packages
-from setuptools.command.install import install
-from setuptools.command.develop import develop
 import os
 import sys
 import subprocess
@@ -23,19 +21,8 @@ PACKAGE = "vast_client_tools"
 ROOT = os.path.dirname(__file__)
 VERSION = open(os.path.join(ROOT, "version.txt")).read().strip()
 
-
-class CustomInstallCommand(install):
-    """Custom handler for the 'install' command to link bcc lib from dist-packages."""
-    def run(self):
-        install.run(self)
-        subprocess.run([sys.executable, os.path.join(ROOT, PACKAGE, "link_bcc.py")])
-
-
-class CustomDevelopCommand(develop):
-    """Custom handler for the 'develop' command to link bcc lib from dist-packages."""
-    def run(self):
-        develop.run(self)
-        subprocess.run([sys.executable, os.path.join(ROOT, PACKAGE, "link_bcc.py")])
+# link bcc lib from dist-packages.
+subprocess.run([sys.executable, os.path.join(ROOT, PACKAGE, "link_bcc.py")])
 
 
 requires = [
@@ -76,7 +63,7 @@ setup(
     package_data=package_data,
     entry_points={
         'console_scripts': [
-            'vnfs = vast_client_tools.main:main',
+            'vnfs-collector = vast_client_tools.main:main',
         ],
         'drivers': [
             'screen = vast_client_tools.drivers:ScreenDriver',
@@ -87,8 +74,4 @@ setup(
     },
     install_requires=requires,
     python_requires='>=3.6',
-    cmdclass={
-        'install': CustomInstallCommand,
-        'develop': CustomDevelopCommand,
-    }
 )

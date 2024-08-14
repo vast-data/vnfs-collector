@@ -3,7 +3,7 @@ set -e
 
 # Define paths
 VENV_PATH="/opt/vnfs-collector/src/venv"
-SYMLINK_PATH="/usr/local/bin/vnfs"
+SYMLINK_PATH="/usr/local/bin/vnfs-collector"
 VERSION_FILE="/opt/vnfs-collector/src/version.txt"
 SYSTEMD="/opt/vnfs-collector/src/vnfs-collector.service"
 PYLIB_VERSION=$(cat "${VERSION_FILE}")
@@ -35,8 +35,8 @@ if [ -L "${SYMLINK_PATH}" ]; then
 fi
 
 # Create a new symlink
-echo "Creating symlink from ${VENV_PATH}/bin/vnfs -> ${SYMLINK_PATH}"
-ln -s "${VENV_PATH}/bin/vnfs" "${SYMLINK_PATH}"
+echo "Creating symlink from ${VENV_PATH}/bin/vnfs-collector -> ${SYMLINK_PATH}"
+ln -s "${VENV_PATH}/bin/vnfs-collector" "${SYMLINK_PATH}"
 
 
 cp "${SYSTEMD}" /etc/systemd/system/vnfs-collector.service && rm -f "${SYSTEMD}"

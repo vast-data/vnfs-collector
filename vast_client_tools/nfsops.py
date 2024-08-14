@@ -8,6 +8,7 @@
 
 import os
 import psutil
+import socket
 from threading import Thread
 from datetime import datetime
 from pathlib import Path
@@ -234,7 +235,7 @@ class StatsCollector:
         self.b = bpf
         self.pid_env_map = pid_env_map
         self.mounts_map = mounts_map
-        self.hostname = os.getenv("HOSTNAME")
+        self.hostname = os.getenv("HOSTNAME", socket.gethostname())
         # check whether hash table batch ops is supported
         self.batch_ops = True if BPF.kernel_struct_has_field(b'bpf_map_ops',
             b'map_lookup_and_delete_batch') == 1 else False

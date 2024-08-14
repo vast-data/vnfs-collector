@@ -4,7 +4,7 @@ set -e
 # Define variables
 SERVICE_NAME="vnfs-collector"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
-SYMLINK_PATH="/usr/local/bin/vnfs"
+SYMLINK_PATH="/usr/local/bin/vnfs-collector"
 INSTALL_PATH="/opt/vnfs-collector"
 VENV_PATH="${INSTALL_PATH}/src/venv"
 

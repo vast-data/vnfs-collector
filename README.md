@@ -69,9 +69,9 @@ apt install ./dist/nfs-stats-collector_1.0.0-1_amd64.deb
 dnf install ./dist/nfs-stats-collector-1.0.0-1.x86_64.rpm
 ```
 
-Both packages install a basic console utility **vnfs** which will be added to the system PATH. This allows you to use the utility directly from the command line.
+Both packages install a basic console utility **vnfs-collector** which will be added to the system PATH. This allows you to use the utility directly from the command line.
 ```bash
-vnfs --help
+vnfs-collector --help
 ```
 
 Additionally:
@@ -90,32 +90,32 @@ Logs can be viewed using the following command:
 journalctl -u vnfs-collector
 ```
 
-### "Stand-alone" vnfs Usage
+### "Stand-alone" vnfs-collector Usage
 <div style="border: 1px solid yellow; background-color: #fffadd; padding: 10px; margin: 10px 0;">
   <strong>Warning:</strong> 
 Due to internal package requirements, the utility must be run exclusively as the root user.
 </div>
 
-The **vnfs** utility can be used as a stand-alone tool without the need for the systemd service. This can be useful for testing and debugging purposes.
+The **vnfs-collector** utility can be used as a stand-alone tool without the need for the systemd service. This can be useful for testing and debugging purposes.
 Helpful information can be found by running:
 ```bash
-vnfs --help
+vnfs-collector --help
 ```
 Using help you can check all required and optional arguments of the utility.
 
 At least one driver must be specified when running the utility. For example, to output statistics to the console, use:
 ```bash
-[sudo] vnfs -d screen
+[sudo] vnfs-collector -d screen
 ```
 
 To output statistics to a local file, use:
 ```bash
-[sudo] vnfs -d file --samples-path /path/to/logfile
+[sudo] vnfs-collector -d file --samples-path /path/to/logfile
 ```
 
 All available options can be provided as command-line arguments or using configuration file:
 ```bash
-[sudo] vnfs -C /path/to/config/file
+[sudo] vnfs-collector -C /path/to/config/file
 ```
 Configuration file example:
 ```yaml
