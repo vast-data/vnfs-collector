@@ -1,0 +1,26 @@
+services:
+  vnfs-collector:
+    build:
+      context: .
+      dockerfile: docker/debian.Dockerfile
+    privileged: true
+    command:
+      - -C
+      - /opt/vnfs-collector/nfsops.yaml
+    volumes:
+      - .:/opt/nfsops
+      - /lib/modules:/lib/modules:ro
+      - /usr/src:/usr/src:ro
+      - /usr/sbin:/usr/sbin:rx
+      - /sys/fs:/sys/fs:ro
+      - /sys/kernel:/sys/kernel:ro
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - 9090:9090
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    restart: always
