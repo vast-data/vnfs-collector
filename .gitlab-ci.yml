@@ -1,0 +1,26 @@
+stages:
+  - build
+
+image: docker:latest
+
+variables:
+  DOCKER_REGISTRY: ${AWS_ACCOUNT_ID}.dkr.ecr.eu-west-1.amazonaws.com
+  IMAGE_NAME: ${AWS_ACCOUNT_ID}.dkr.ecr.eu-west-1.amazonaws.com/dev/vnfs-collector:${CI_PIPELINE_ID}
+
+
+build_vnfs_collector:
+  stage: build
+  script: |
+    set -x
+    LATEST=${DOCKER_REGISTRY}/dev/vnfs-collector:latest
+    if (docker pull $LATEST) ; then
+      docker tag $LATEST vnfs-collector:latest  # the cache-source for our subsequent build
+    fi
+    docker build -t vnfs-collector:dev -f docker/debian.Dockerfile --cache-from vnfs-collector:latest .
+    docker tag vnfs-collector:dev ${IMAGE_NAME}
+    docker tag vnfs-collector:dev ${LATEST}
+    docker push ${IMAGE_NAME}
+    docker push ${LATEST}
+    echo "pushed ${IMAGE_NAME}"
+  tags:
+    - vast-dev-builder

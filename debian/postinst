@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+
+/opt/vnfs-collector/src/hack/pack_install.sh

@@ -15,6 +15,10 @@
 pname:=vnfs-collector
 install_path=$(CURDIR)/debian/$(pname)
 
+# Read version from version.txt
+pylib_version=$(shell cat version.txt)
+pylib_tar=vast_client_tools-$(pylib_version).tar.gz
+
 %:
 	dh $@
 
@@ -25,9 +29,10 @@ override_dh_auto_configure:
 override_dh_auto_build:
 
 override_dh_auto_install:
-	mkdir -p $(install_path)/opt/$(pname)
-	mkdir -p $(install_path)/etc/systemd/system
-	install -m 755 $(CURDIR)/nfsops.c $(install_path)/opt/$(pname)/
-	install -m 755 $(CURDIR)/nfsops.py $(install_path)/opt/$(pname)/
-	install -m 644 $(CURDIR)/nfsops.yaml $(install_path)/opt/$(pname)/
-	install -m 755 $(CURDIR)/systemd/$(pname).service $(install_path)/etc/systemd/system/
+	mkdir -p $(install_path)/opt/$(pname)/src/hack
+
+	install -m 755 $(CURDIR)/dist/$(pylib_tar) $(install_path)/opt/$(pname)/src/
+	install -m 755 $(CURDIR)/version.txt $(install_path)/opt/$(pname)/src/
+	install -m 755 $(CURDIR)/nfsops.yaml $(install_path)/opt/$(pname)/
+	install -m 644 $(CURDIR)/systemd/$(pname).service $(install_path)/opt/$(pname)/src/
+	cp -r $(CURDIR)/hack/* $(install_path)/opt/$(pname)/src/hack/
