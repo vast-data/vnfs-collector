@@ -1,5 +1,6 @@
 import os
 import argparse
+import time
 from threading import Lock
 from collections import deque
 
@@ -13,7 +14,7 @@ except:
 from prometheus_client.core import GaugeMetricFamily
 
 from vast_client_tools.drivers.base import DriverBase
-from vast_client_tools.nfsops import STATKEYS
+from vast_client_tools.nfsops import STATKEYS, group_stats
 
 
 
@@ -76,7 +77,7 @@ class PrometheusDriver(DriverBase, Collector):
 
     def _create_gauge(self, name, help_text, labels, value):
         gauge = GaugeMetricFamily(name, help_text, labels=labels.keys())
-        gauge.add_metric(labels.values(), value)
+        gauge.add_metric(labels.values(), value, time.time())
         return gauge
 
     def collect(self):
@@ -85,21 +86,25 @@ class PrometheusDriver(DriverBase, Collector):
             samples_count = len(self.local_buffer)
             if samples_count == 0:
                 return
-            self.logger.debug(f"Found {samples_count} samples.")
+            self.logger.info(f"Found {samples_count} samples.")
             while self.local_buffer:
-                statistics = self.local_buffer.popleft()
-                for stat in statistics:
+                data = self.local_buffer.popleft()
+                if self.common_args.squash_pid:
+                    data = group_stats(data, ["COMM", "TAGS", "MOUNT", "PID"])
+                else:
+                    data = group_stats(data, ["COMM", "TAGS", "MOUNT"])
+                for _, entry in data.iterrows():
                     labels_kwargs = {
-                        "HOSTNAME": stat["HOSTNAME"],
-                        "UID": str(stat["UID"]),
-                        "COMM": stat["COMM"],
-                        "MOUNT": stat["MOUNT"],
+                        "HOSTNAME": entry.HOSTNAME,
+                        "UID": str(entry.UID),
+                        "COMM": entry.COMM,
+                        "MOUNT": entry.MOUNT,
                     }
-                    if self.envs:
-                        for env in self.envs:
+                    if self.common_args.envs:
+                        for env in self.common_args.envs:
                             try:
-                                labels_kwargs.update({env: stat["TAGS"][env]})
+                                labels_kwargs.update({env: entry.TAGS[env]})
                             except:
                                 labels_kwargs.update({env: ""})
                     for s in STATKEYS.keys():
-                        yield self._create_gauge(s, STATKEYS[s], labels_kwargs, stat[s])
+                        yield self._create_gauge(s, STATKEYS[s], labels_kwargs, entry[s])

@@ -68,30 +68,34 @@ available_drivers = sorted(set([e.name for e in ENTRYPOINTS]))
 conf_parser = argparse.ArgumentParser(formatter_class=HelpFormatter)
 conf_parser.add_argument(
     '-d', '--driver',
-    help="driver to enable. "
+    help="Driver to enable. "
          f"Available options: {available_drivers}. "
          f"User can specify multiple options.",
     choices=available_drivers, action='append', required=False,
 )
 conf_parser.add_argument(
     "--debug", action="store_true",
-    help="enable debug prints"
+    help="Enable debug prints."
 )
 conf_parser.add_argument(
     "-i", "--interval", default=5,
-    help="output interval, in seconds"
+    help="Output interval, in seconds."
 )
 conf_parser.add_argument(
     "-v", "--vaccum", default=600,
-    help="pid env map vaccum interval, in seconds"
+    help="Pid env map vaccum interval, in seconds."
 )
 conf_parser.add_argument(
     "-e", "--envs", type=lambda v: v.split(','),
-    help="comma separated list of env vars"
+    help="Comma separated list of env vars."
 )
 conf_parser.add_argument(
     "--ebpf", action="store_true",
-    help="dump BPF program text and exit"
+    help="Dump BPF program text and exit."
+)
+conf_parser.add_argument(
+    "--squash-pid", type=bool, default=True,
+    help="Group statistics by PID."
 )
 conf_parser.add_argument(
     "-C", "--cfg", default=None,
@@ -125,6 +129,7 @@ async def _exec():
         f"vaccum={args.vaccum}, "
         f"envs={args.envs}, "
         f"ebpf={args.ebpf}, "
+        f"squash-pid={args.squash_pid}, "
         f"config={args.cfg}"
     )
     # read BPF program text
@@ -147,7 +152,7 @@ async def _exec():
         namespace=ENTRYPOINT_GROUP,
         invoke_on_load=True,
         names=drivers,
-        invoke_kwds=dict(envs=args.envs)
+        invoke_kwds=dict(common_args=args)
     )
 
     def on_exit(sig=None, frame=None):
@@ -193,10 +198,14 @@ async def _exec():
     while True:
         await asyncio.sleep(args.interval)
         data = collector.collect_stats()
-        if not data:
+        if data.empty:
             continue
         await asyncio.gather(*mgr.map_method("store_sample", data=data))
 
 
 def main():
-    asyncio.run(_exec())
+    loop = asyncio.get_event_loop()
+    try:
+        return loop.run_until_complete(_exec())
+    finally:
+        loop.close()

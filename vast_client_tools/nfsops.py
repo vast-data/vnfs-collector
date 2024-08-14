@@ -12,10 +12,17 @@ from threading import Thread
 from datetime import datetime
 from pathlib import Path
 from bcc import BPF
+import pandas as pd
 
 from vast_client_tools.logger import get_logger, COLORS
 
 logger = get_logger("nfsops", COLORS.magenta)
+
+
+class hashabledict(dict):
+    def __hash__(self):
+        return hash(tuple(sorted(self.items())))
+
 
 STATKEYS = {
         "OPEN_COUNT":       "Number of NFS OPEN calls",
@@ -81,6 +88,23 @@ STATKEYS = {
 
 def nstosec(val_in_ns):
     return float(val_in_ns) / 1000000000
+
+
+def group_stats(data: pd.DataFrame, group_fields: list):
+    """
+    Group dataframe by provided group fields.
+    """
+    agg_funcs = {col: "sum" for col in STATKEYS.keys()}
+    agg_funcs.update(
+        {
+            col: "last"
+            for col in data.columns
+            if col not in STATKEYS and col not in group_fields
+        }
+    )
+    # Aggregate DataFrame
+    return data.groupby(group_fields).agg(agg_funcs).reset_index()
+
 
 class MountsMap:
     def __init__(self):
@@ -271,14 +295,7 @@ class StatsCollector:
             self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattr count
             self.b.attach_kretprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
 
-    def stat_match(self, stat, new, combine_fields):
-        return all(stat[fld] == new[fld] for fld in combine_fields)
-
-    def combine_stat(self, stat, new):
-        for key in STATKEYS.keys():
-            stat[key] += new[key]
-
-    def collect_stats(self, combine_fields=("PID", "MOUNT")):
+    def collect_stats(self):
         timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         logger.info(f"######## collect sample ########")
 
@@ -350,20 +367,12 @@ class StatsCollector:
                     "LISTXATTR_COUNT":  v.listxattr.count,
                     "LISTXATTR_ERRORS": v.listxattr.errors,
                     "LISTXATTR_DURATION":nstosec(v.listxattr.duration),
-                    "TAGS":         self.pid_env_map.get(k.tgid),
+                    "TAGS":         hashabledict(self.pid_env_map.get(k.tgid)),
                     "MOUNT":        self.mounts_map.get_mountpoint(k.sbdev),
             }
-
-            # search of we have multiple threads (pid) of the same process (tgid)
-            match = list(filter(lambda stat: self.stat_match(stat, output, combine_fields), statistics))
-            if match:
-                logger.debug("StatsCollector: combined stat for PID %d (thread %d)" %
-                        (output["PID"], k.pid))
-                self.combine_stat(match[0], output)
-            else:
-                statistics.append(output)
+            statistics.append(output)
 
         if not self.batch_ops:
             counts.clear()
 
-        return statistics
+        return pd.DataFrame(statistics)

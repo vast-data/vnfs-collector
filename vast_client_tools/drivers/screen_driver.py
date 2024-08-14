@@ -1,5 +1,6 @@
 import argparse
-from tabulate import tabulate
+
+from vast_client_tools.nfsops import group_stats
 from vast_client_tools.drivers.base import DriverBase
 
 
@@ -16,14 +17,10 @@ class ScreenDriver(DriverBase):
         self.logger.info(f"{self} has been initialized.")
 
     async def store_sample(self, data):
+        if self.common_args.squash_pid:
+            data = group_stats(data, ["PID", "MOUNT"])
         if self.table_format:
-            columns = list(data[0].keys())
-            # Transpose the data to create a table with field names and their values across samples
-            transposed_data = [
-                [col] + [entry.get(col, None) for entry in data] for col in columns
-            ]
-            # Create headers
-            headers = ["Field"] + [f"Sample {ind}" for ind in range(len(columns))]
-            # Print the table
-            data = tabulate(transposed_data, headers=headers, tablefmt="rounded_grid")
-        self.logger.info(f">>>\n{data}")
+            output = data.T.to_string(index=False)
+        else:
+            output = "\n".join(str(d.to_dict()) for _, d in data.iterrows())
+        self.logger.info(f">>>\n{output}")

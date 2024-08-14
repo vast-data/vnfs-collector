@@ -1,8 +1,9 @@
 import argparse
 
 import pyarrow as pa
-from vastdb.session import Session
+from vastdb.api import VastdbApi
 
+from vast_client_tools.nfsops import group_stats
 from vast_client_tools.drivers.base import DriverBase
 
 
@@ -28,44 +29,33 @@ class VdbDriver(DriverBase):
 
     async def setup(self, args=(), namespace=None):
         args = await super().setup(args, namespace)
-        self.db_endpoint = args.db_endpoint
+        self.db_endpoint = args.db_endpoint.strip("http://").strip("https://")
         db_access_key = args.db_access_key
         db_secret_key = args.db_secret_key
         self.db_bucket = args.db_bucket
         self.db_schema = args.db_schema
         self.db_table = args.db_table
         self.db_ssl_verify = args.db_ssl_verify
-        self.session = Session(
-            endpoint=self.db_endpoint, access=db_access_key, secret=db_secret_key, ssl_verify=self.db_ssl_verify
+        self.vastapi = VastdbApi(
+            host=self.db_endpoint, access_key=db_access_key, secret_key=db_secret_key, secure=self.db_ssl_verify
         )
-        with self.session.transaction() as tx:
-            bucket = tx.bucket(self.db_bucket)
-            schema = bucket.create_schema(self.db_schema, fail_if_exists=False)
-            schema.create_table(self.db_table, self.get_columns(), fail_if_exists=False)
+        if not self.vastapi.list_schemas(bucket=self.db_bucket, schema=self.db_schema):
+            self.vastapi.create_schema(self.db_bucket, self.db_schema)
+        if not self.vastapi.list_tables(
+                bucket=self.db_bucket, schema=self.db_schema, name_prefix=self.db_table, exact_match=True
+        ):
+            self.vastapi.create_table(
+                bucket=self.db_bucket, schema=self.db_schema, name=self.db_table, arrow_schema=self.get_columns()
+            )
+        self.logger.info(f"{self} has been initialized.")
 
     async def store_sample(self, data):
-        arrow_table = self.convert_data_to_arrow(data, self.get_columns())
-        with self.session.transaction() as tx:
-            tx.bucket(self.db_bucket).schema(self.db_schema).table(self.db_table).insert(arrow_table)
-
-    def convert_data_to_arrow(self, data, schema):
-        table_data = {field.name: [] for field in schema}
-
-        for record in data:
-            for field in schema:
-                value = record.get(field.name, None)
-                # Handle missing values
-                if value is None:
-                    table_data[field.name].append(None)
-                else:
-                    # Convert data types as needed
-                    if field.type == pa.string() and isinstance(value, dict):
-                        value = str(value)  # Convert dict to string
-                    elif field.type == pa.string() and isinstance(value, bytes):
-                        value = value.decode()  # Convert bytes to string
-                    table_data[field.name].append(value)
-        arrow_table = pa.table(schema=schema, data=list(table_data.values()))
-        return arrow_table
+        if self.common_args.squash_pid:
+            data = group_stats(data, ["PID", "MOUNT"])
+        record_batch = pa.RecordBatch.from_pandas(df=data, schema=self.get_columns())
+        self.vastapi.insert(
+            bucket=self.db_bucket, schema=self.db_schema, table=self.db_table, record_batch=record_batch
+        )
 
     @classmethod
     def get_columns(cls):
@@ -134,6 +124,6 @@ class VdbDriver(DriverBase):
             ('LISTXATTR_COUNT', pa.int32()),
             ('LISTXATTR_ERRORS', pa.int32()),
             ('LISTXATTR_DURATION', pa.float64()),
-            ('TAGS', pa.string()),  # The TAGS column may be manipulated by the client.
+            ('TAGS', pa.map_(pa.string(), pa.string())),  # The TAGS column may be manipulated by the client.
             ('MOUNT', pa.utf8())
         ])

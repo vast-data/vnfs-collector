@@ -1,9 +1,9 @@
 import logging
-import json
 import argparse
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
+from vast_client_tools.nfsops import group_stats
 from vast_client_tools.drivers.base import DriverBase
 
 
@@ -55,5 +55,7 @@ class FileDriver(DriverBase):
         self.logger.info(f"{self} has been initialized.")
 
     async def store_sample(self, data):
-        for entry in data:
-            self.samples_logger.debug(json.dumps(entry))
+        if self.common_args.squash_pid:
+            data = group_stats(data, ["PID", "MOUNT"])
+        for _, entry in data.iterrows():
+            self.samples_logger.debug(entry.to_json())

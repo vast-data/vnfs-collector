@@ -5,7 +5,7 @@ Summary:        NFS metrics collector based on eBPF
 BuildArch:      noarch
 License:        GPL
 Provides:       vnfs-collector
-Requires:       python3 python3-bcc
+Requires:       python3 python3-bcc >= 0.23.0
 Requires(post): systemd
 
 %description
@@ -24,10 +24,10 @@ mkdir -p %{buildroot}/opt/vnfs-collector/src/hack
 
 pname=vnfs-collector
 pylib_version=$(cat %{_sourcedir}/version.txt)
-pylib_tar=vast_client_tools-${pylib_version}.tar.gz
+pylib_wheel=vast_client_tools-${pylib_version}-py3-none-any.whl
 
 # Install the tarball and other files
-install -m 755 %{_sourcedir}/dist/$pylib_tar %{buildroot}/opt/$pname/src/
+install -m 755 %{_sourcedir}/dist/$pylib_wheel %{buildroot}/opt/$pname/src/
 install -m 755 %{_sourcedir}/version.txt %{buildroot}/opt/$pname/src/
 install -m 755 %{_sourcedir}/nfsops.yaml %{buildroot}/opt/$pname/
 install -m 644 %{_sourcedir}/systemd/$pname.service %{buildroot}/opt/$pname/src/

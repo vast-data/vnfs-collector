@@ -1,5 +1,6 @@
 import abc
 import argparse
+
 from vast_client_tools.logger import get_logger, COLORS
 
 
@@ -17,9 +18,9 @@ def get_val_or_raise(args, key):
 class DriverBase(abc.ABC):
     parser = NotImplemented
 
-    def __init__(self, envs: list):
+    def __init__(self, common_args: argparse.Namespace):
         self.name = self.__class__.__name__.lower().replace("driver", "")
-        self.envs = envs
+        self.common_args = common_args
         self.logger = get_logger(self.name, COLORS.blue)
 
     def __str__(self):
@@ -32,6 +33,7 @@ class DriverBase(abc.ABC):
         pass
 
     async def setup(self, args=(), namespace=None):
+        self.logger.info("Setting up driver.")
         if namespace:
             namespace = argparse.Namespace(**namespace)
             # Create a new namespace with default values and update it from action defaults.

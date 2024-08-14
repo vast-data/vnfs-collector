@@ -10,7 +10,7 @@ distdir:
 pylib:
 	@echo "Building python library"
 	@python3 -m build
-	@rm -f dist/*.whl
+	@rm -f dist/*.gz
 
 rpm: distdir pylib
 	rpmbuild -bb vnfs-collector.spec --define "_sourcedir `pwd`"

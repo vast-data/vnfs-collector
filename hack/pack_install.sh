@@ -7,7 +7,7 @@ SYMLINK_PATH="/usr/local/bin/vnfs"
 VERSION_FILE="/opt/vnfs-collector/src/version.txt"
 SYSTEMD="/opt/vnfs-collector/src/vnfs-collector.service"
 PYLIB_VERSION=$(cat "${VERSION_FILE}")
-TAR_FILE="/opt/vnfs-collector/src/vast_client_tools-${PYLIB_VERSION}.tar.gz"
+PY_WHEEL="/opt/vnfs-collector/src/vast_client_tools-${PYLIB_VERSION}-py3-none-any.whl"
 
 # Ensure the virtual environment directory exists
 mkdir -p "${VENV_PATH}"
@@ -22,7 +22,10 @@ python3 -m venv "${VENV_PATH}"
 
 # Activate the virtual environment and install the package
 source "${VENV_PATH}/bin/activate"
-pip install "${TAR_FILE}" && rm -f "${TAR_FILE}"
+pip install --upgrade pip || true
+pip install --upgrade Cython || true
+pip install "${PY_WHEEL}" && rm -f "${PY_WHEEL}"
+python3 -c "from vast_client_tools.link_bcc import link_bcc; link_bcc()"
 deactivate
 
 # Remove the old symlink if it exists
@@ -32,7 +35,7 @@ if [ -L "${SYMLINK_PATH}" ]; then
 fi
 
 # Create a new symlink
-echo "Creating symlink from ${VENV_PATH}/bin/vnfs to ${SYMLINK_PATH}"
+echo "Creating symlink from ${VENV_PATH}/bin/vnfs -> ${SYMLINK_PATH}"
 ln -s "${VENV_PATH}/bin/vnfs" "${SYMLINK_PATH}"
 
 

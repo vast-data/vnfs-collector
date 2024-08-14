@@ -16,78 +16,36 @@ from setuptools import setup, find_packages
 from setuptools.command.install import install
 from setuptools.command.develop import develop
 import os
-import glob
-import site
+import sys
+import subprocess
 
-
-VERSION = open(os.path.join(os.path.dirname(__file__), 'version.txt')).read().strip()
-
-
-def find_python3_packages(base_dirs):
-    """Find all Python 3 dist-packages and site-packages directories."""
-    python_dirs = []
-    # Define possible package directories
-    package_dirs = ['dist-packages', 'site-packages']
-
-    for base_dir in base_dirs:
-        # Search for Python version directories
-        for py_version_dir in glob.glob(os.path.join(base_dir, 'python3*')):
-            for package_dir in package_dirs:
-                path = os.path.join(py_version_dir, package_dir)
-                if os.path.isdir(path):
-                    python_dirs.append(path)
-    return python_dirs
-
-
-def find_package_in_dirs(package_name, dirs):
-    """Find package in the provided directories."""
-    found_paths = []
-    for directory in dirs:
-        for root, _, files in os.walk(directory):
-            # Check for the presence of the package folder
-            if package_name in root and any(file.endswith('.py') for file in files):
-                found_paths.append(root)
-    return found_paths
-
-
-def link_bcc():
-    base_dirs = ['/usr/lib', os.path.expanduser('~/.local/lib')]
-    python3_dirs = find_python3_packages(base_dirs)
-    package_name = 'bcc'
-    found_paths = find_package_in_dirs(package_name, python3_dirs)
-    if found_paths:
-        bcc_path = found_paths[0]
-        site_packages_dirs = site.getsitepackages()
-        for site_pkg_dir in site_packages_dirs:
-            symlink_path = os.path.join(site_pkg_dir, package_name)
-            if not os.path.exists(symlink_path):
-                try:
-                    os.symlink(bcc_path, symlink_path)
-                except OSError as e:
-                    print(f"Failed to create symlink {symlink_path}: {e}")
+PACKAGE = "vast_client_tools"
+ROOT = os.path.dirname(__file__)
+VERSION = open(os.path.join(ROOT, "version.txt")).read().strip()
 
 
 class CustomInstallCommand(install):
-    """Custom handler for the 'install' command to copy extra data files."""
+    """Custom handler for the 'install' command to link bcc lib from dist-packages."""
     def run(self):
         install.run(self)
-        link_bcc()
+        subprocess.run([sys.executable, os.path.join(ROOT, PACKAGE, "link_bcc.py")])
 
 
 class CustomDevelopCommand(develop):
-    """Custom handler for the 'develop' command to copy extra data files."""
+    """Custom handler for the 'develop' command to link bcc lib from dist-packages."""
     def run(self):
         develop.run(self)
-        link_bcc()
+        subprocess.run([sys.executable, os.path.join(ROOT, PACKAGE, "link_bcc.py")])
 
 
 requires = [
     "psutil==6.0.0",
     "PyYAML==6.0.1",
     "stevedore==3.5.2",
-    "tabulate==0.8.9",
     "prometheus_client==0.17.1",
-    "vastdb==1.1.1",
+    "vastdb==0.0.5.4",
+    "pandas",
+    "pyarrow",
     'importlib-metadata; python_version<"3.7"',
     'colorama==0.4.6; sys.platform == "win32"',
 ]
@@ -128,7 +86,7 @@ setup(
         ],
     },
     install_requires=requires,
-    python_requires='>=3.9',
+    python_requires='>=3.6',
     cmdclass={
         'install': CustomInstallCommand,
         'develop': CustomDevelopCommand,
