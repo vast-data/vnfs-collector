@@ -55,4 +55,4 @@ class FileDriver(DriverBase):
 
     async def store_sample(self, data):
         for _, entry in data.iterrows():
-            self.samples_logger.debug(entry.to_json())
+            self.samples_logger.debug(str(entry.to_dict()))

@@ -317,9 +317,9 @@ class StatsCollector:
             self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattr count
             self.b.attach_kretprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
 
-    def collect_stats(self, squash_pid=False):
+    def collect_stats(self, squash_pid=False, filter_tags: list[str] = None, filter_condition: str = None):
         timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        logger.info(f"######## collect sample ########")
+        logger.debug(f"######## collect sample ########")
 
         counts = self.b.get_table("counts")
         statistics = []
@@ -399,6 +399,14 @@ class StatsCollector:
 
         df = pd.DataFrame(statistics)
         if not df.empty:
+            if filter_condition == "any":
+                # Verifies if any of the filter tags are present in the TAGS dictionary
+                # and filters the DataFrame accordingly.
+                df = df[df["TAGS"].apply(lambda tags: any(filter_tag in tags for filter_tag in filter_tags))]
+            elif filter_condition == "all":
+                # Verifies if all the filter tags are present in the TAGS dictionary
+                # and filters the DataFrame based on this condition.
+                df = df[df["TAGS"].apply(lambda tags: all(filter_tag in tags for filter_tag in filter_tags))]
             if squash_pid:
                 # aggregation by command, tags and mount.
                 # Pid will be squashed eg, if we have the same command but different pids
