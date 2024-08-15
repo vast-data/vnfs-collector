@@ -1,9 +1,9 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 
 Files: *
-Copyright: Copyright 2020 VAST Data <support@vastdata.com>
+Copyright: Copyright 2024 VAST Data <support@vastdata.com>
 License: Apache-2.0
- VAST Data Software is licensed under the Apache License, Version 2.0 (the "License");
+ This Software is licensed under the Apache License, Version 2.0 (the "License");
  you may not use this software except in compliance with the License.
  You may obtain a copy of the License at
      http://www.apache.org/licenses/LICENSE-2.0
