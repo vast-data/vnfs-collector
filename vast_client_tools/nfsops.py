@@ -6,21 +6,25 @@
 #
 # uses in-kernel eBPF maps to store per process summaries for efficiency.
 
-import os, argparse, signal, psutil, yaml
+import os
+import psutil
+import socket
 from threading import Thread
-from time import sleep
 from datetime import datetime
 from pathlib import Path
 from bcc import BPF
-os.environ['PROMETHEUS_DISABLE_CREATED_SERIES'] = "1"
-import prometheus_client as prom
-try:
-    from prometheus_client.registry import Collector
-except:
-    from prometheus_client.registry import CollectorRegistry as Collector
-from prometheus_client.core import GaugeMetricFamily
+import pandas as pd
 
-CFG_FILE="/opt/vnfs-collector/nfsops.yaml"
+from vast_client_tools.logger import get_logger, COLORS
+
+logger = get_logger("nfsops", COLORS.magenta)
+
+
+class hashabledict(dict):
+    def __hash__(self):
+        return hash(tuple(sorted(self.items())))
+
+
 STATKEYS = {
         "OPEN_COUNT":       "Number of NFS OPEN calls",
         "OPEN_ERRORS":      "Number of NFS OPEN errors",
@@ -86,6 +90,44 @@ STATKEYS = {
 def nstosec(val_in_ns):
     return float(val_in_ns) / 1000000000
 
+
+def group_stats(data: pd.DataFrame, group_fields: list):
+    """
+    Group dataframe by provided group fields.
+    Lest say we have dataframe of 4 rows:
+    [
+        {'PID': 1, 'MOUNT': '/mnt', 'COMM': 'ls' ...
+        {'PID': 1, 'MOUNT': '/mnt', 'COMM': 'ls' ...
+        {'PID': 2, 'MOUNT': '/mnt', 'COMM': 'ls', ...
+        {'PID': 2, 'MOUNT': '/mnt', 'COMM': 'bash' ...
+    ]
+    Aggregation by PID produces 2 rows cause there are 2 unique pids:
+        COMM  OPEN_COUNT  OPEN_ERRORS  ...      HOSTNAME   UID  TAGS
+        bash           0            0  ...  47fcdb40cfb7  1000    {}
+         ls           0            0  ...  47fcdb40cfb7  1000    {}
+
+    Aggregation by MOUNT produces 1 row cause mount is common for all entries:
+        MOUNT  OPEN_COUNT  OPEN_ERRORS  ...      HOSTNAME   UID  TAGS
+        /mnt           0            0  ...  47fcdb40cfb7  1000    {}
+
+    Aggregation by COMM and PID produces 3 columns cause among 4 entries only 1 pair where COMM and PID are the same:
+        COMM  PID  OPEN_COUNT  ...      HOSTNAME   UID  TAGS
+        bash  2           0  ...  47fcdb40cfb7  1000    {}
+        ls    1           0  ...  47fcdb40cfb7  1000    {}
+        ls    2           0  ...  47fcdb40cfb7  1000    {}
+    """
+    agg_funcs = {col: "sum" for col in STATKEYS.keys()}
+    agg_funcs.update(
+        {
+            col: "last"
+            for col in data.columns
+            if col not in STATKEYS and col not in group_fields
+        }
+    )
+    # Aggregate DataFrame
+    return data.groupby(group_fields).agg(agg_funcs).reset_index()
+
+
 class MountsMap:
     def __init__(self):
         self.map = {}
@@ -112,7 +154,7 @@ class MountsMap:
             devt = self.devt_to_str(os.stat(p.mountpoint).st_dev)
             if devname == devt:
                 return p.mountpoint
-        print("WARNING: No mountpoint found for devt {}".format(devname))
+        logger.warning("No mountpoint found for devt {}".format(devname))
         return ""
 
     def get_mountpoint(self, st_dev):
@@ -123,7 +165,7 @@ class MountsMap:
             self.refresh_map()
             if dev in self.map.keys():
                 return self.map[dev]
-        print("WARNING: No mountpoint found for devt {}".format(dev))
+        logger.warning("No mountpoint found for devt {}".format(dev))
         return ""
 
 
@@ -142,9 +184,8 @@ class PidEnvMap:
             if not Path("/proc/%s/environ" % pid).exists():
                 del self.pidmap[pid]
         self.start = datetime.now()
-        if debug:
-            print("PidEnvMap: vaccumed...")
-            print(self.pidmap)
+        logger.debug("PidEnvMap: vaccumed...")
+        logger.debug(self.pidmap)
 
     def vaccum_if_needed(self):
         if (datetime.now() - self.start).total_seconds() > self.vaccum_interval:
@@ -152,57 +193,29 @@ class PidEnvMap:
 
     def insert(self, pid, envs):
         self.pidmap[str(pid)] = envs
-        if debug:
-            print("PidEnvMap: insert pid[%d]" % pid)
-            print(self.pidmap)
+        logger.debug("PidEnvMap: insert pid[%d]" % pid)
+        logger.debug(self.pidmap)
 
     def get(self, pid):
         try:
             return self.pidmap[str(pid)]
         except:
-            if debug:
-                print("pid %d not found" % pid)
-                print(self.pidmap)
+            logger.debug("pid %d not found" % pid)
+            logger.debug(self.pidmap)
             return {}
-
-class ScreenOutputTarget:
-    def __init__(self):
-        pass
-
-    def output(self, statistics):
-        for stat in statistics:
-            print(stat)
-
-
-def get_pid_envs(cpu, data, size):
-    data = bpf["events"].event(data)
-    try:
-        environ = open("/proc/%d/environ" % data.pid).read().split('\x00')[:-1]
-    except:
-        return
-
-    def match(envs, env):
-        for e in envs:
-            if env.startswith(e):
-                return True
-        return False
-
-    envs = {env.split('=')[0]:env.split('=')[1] for env in environ if match(args.envs, env)}
-    if envs:
-        pidEnvMap.insert(data.pid, envs)
 
 class EnvTracer:
     """
     Tracer traps pid execution and collects the existance of the tracked
     environment variables.
     """
-    def __init__(self, envs, bpf, PidEnvMap):
+    def __init__(self, envs, bpf, pid_env_map):
         self.envs = envs
         self.b = bpf
-        self.PidEnvMap = PidEnvMap
+        self.pid_env_map = pid_env_map
 
     def start(self):
-        self.b["events"].open_perf_buffer(get_pid_envs)
+        self.b["events"].open_perf_buffer(self.get_pid_envs)
         self.t = Thread(target=self.trace_pid_exec)
         self.t.daemon = True
         self.t.start()
@@ -214,7 +227,24 @@ class EnvTracer:
     def trace_pid_exec(self):
         while True:
             self.b.perf_buffer_poll()
-            self.PidEnvMap.vaccum_if_needed()
+            self.pid_env_map.vaccum_if_needed()
+
+    def get_pid_envs(self, cpu, data, size):
+        data = self.b["events"].event(data)
+        try:
+            environ = open("/proc/%d/environ" % data.pid).read().split('\x00')[:-1]
+        except:
+            return
+
+        def match(envs, env):
+            for e in envs:
+                if env.startswith(e):
+                    return True
+            return False
+
+        envs = {env.split('=')[0]: env.split('=')[1] for env in environ if match(self.envs, env)}
+        if envs:
+            self.pid_env_map.insert(data.pid, envs)
 
 
 class StatsCollector:
@@ -222,12 +252,11 @@ class StatsCollector:
     Tracer traps pid execution and collects the existance of the tracked
     environment variables.
     """
-    def __init__(self, bpf, PidEnvMap, OutputTarget, interval=60):
+    def __init__(self, bpf, pid_env_map, mounts_map):
         self.b = bpf
-        self.PidEnvMap = PidEnvMap
-        self.interval = interval
-        self.hostname = os.getenv("HOSTNAME")
-        self.output_target = OutputTarget
+        self.pid_env_map = pid_env_map
+        self.mounts_map = mounts_map
+        self.hostname = os.getenv("HOSTNAME", socket.gethostname())
         # check whether hash table batch ops is supported
         self.batch_ops = True if BPF.kernel_struct_has_field(b'bpf_map_ops',
             b'map_lookup_and_delete_batch') == 1 else False
@@ -288,21 +317,9 @@ class StatsCollector:
             self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattr count
             self.b.attach_kretprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
 
-    def start(self):
-        self.t = Thread(target=self.poll_stats)
-        self.t.daemon = True
-        self.t.start()
-
-    def stat_match(self, stat, new):
-        return stat["PID"] == new["PID"] and stat["MOUNT"] == new["MOUNT"]
-
-    def combine_stat(self, stat, new):
-        for key in STATKEYS.keys():
-            stat[key] += new[key]
-
     def collect_stats(self):
         timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        print("######## SAMPLE: " + timestamp + " ########")
+        logger.info(f"######## collect sample ########")
 
         counts = self.b.get_table("counts")
         statistics = []
@@ -372,177 +389,12 @@ class StatsCollector:
                     "LISTXATTR_COUNT":  v.listxattr.count,
                     "LISTXATTR_ERRORS": v.listxattr.errors,
                     "LISTXATTR_DURATION":nstosec(v.listxattr.duration),
-                    "TAGS":         self.PidEnvMap.get(k.tgid),
-                    "MOUNT":        mountsMap.get_mountpoint(k.sbdev),
+                    "TAGS":         hashabledict(self.pid_env_map.get(k.tgid)),
+                    "MOUNT":        self.mounts_map.get_mountpoint(k.sbdev),
             }
-
-            # search of we have multiple threads (pid) of the same process (tgid)
-            match = list(filter(lambda stat: self.stat_match(stat, output), statistics))
-            if match:
-                if debug:
-                    print("StatsCollector: combined stat for PID %d (thread %d)" %
-                            (output["PID"], k.pid))
-                self.combine_stat(match[0], output)
-            else:
-                statistics.append(output)
+            statistics.append(output)
 
         if not self.batch_ops:
             counts.clear()
 
-        return statistics
-
-    def poll_stats(self):
-        while True:
-            try:
-                sleep(self.interval)
-            except:
-                return
-            statistics = self.collect_stats()
-            self.output_target.output(statistics)
-
-
-class PromCollector(Collector):
-    def __init__(self, StatsCollector):
-        self.collector = StatsCollector
-
-    def _create_gauge(self, name, help_text, labels, value):
-        gauge = GaugeMetricFamily(name, help_text, labels=labels.keys())
-        gauge.add_metric(labels.values(), value)
-        return gauge
-
-    def collect(self):
-        statistics = self.collector.collect_stats()
-        for stat in statistics:
-            labels_kwargs = {
-                "HOSTNAME": stat["HOSTNAME"],
-                "UID": str(stat["UID"]),
-                "COMM": stat["COMM"],
-                "MOUNT": stat["MOUNT"],
-            }
-            if args.envs:
-                for env in args.envs:
-                    try:
-                        labels_kwargs.update({env: stat["TAGS"][env]})
-                    except:
-                        labels_kwargs.update({env: ""})
-            for s in STATKEYS.keys():
-                yield self._create_gauge(s, STATKEYS[s], labels_kwargs, stat[s])
-
-
-class PrometheusExporter(StatsCollector):
-    """
-    Tracer traps pid execution and collects the existance of the tracked
-    environment variables.
-    """
-    def __init__(self, bpf, PidEnvMap, OutputTarget, port=9000, interval=60):
-        super().__init__(bpf, PidEnvMap, OutputTarget, interval)
-        self.port = port
-        self.collector = PromCollector(self)
-
-
-    def start(self):
-        prom.REGISTRY.unregister(prom.PROCESS_COLLECTOR)
-        prom.REGISTRY.unregister(prom.PLATFORM_COLLECTOR)
-        prom.REGISTRY.unregister(prom.GC_COLLECTOR)
-        prom.REGISTRY.register(self.collector)
-        prom.start_http_server(port=self.port, addr="::")
-
-    def stat_match(self, stat, new):
-        return stat["COMM"] == new["COMM"] and  \
-                stat["TAGS"] == new["TAGS"] and \
-                stat["MOUNT"] == new["MOUNT"]
-
-
-def split_list(values):
-    return values.split(',')
-
-def sighandler(signum, frame):
-    exit(0)
-
-debug = 0
-bpf = None
-pidEnvMap = None
-mountsMap = None
-if __name__ == "__main__":
-    # arguments
-    examples ="""examples:
-        ./nfsops.py                         # NFS operations trace every 5 seconds
-        ./nfsops.py -i 60                   # NFS operations trace every 60 seconds
-        ./nfsops.py -v 700                  # Vaccume every 700 seconds
-        ./nfsops.py -e JOBID,SCHEDID        # Decorate samples with env variables JOBID and SCHEDID
-        ./nfsops.py --ebpf                  # dump ebpf program text and exit
-        ./nfsops.py -P                      # start a prometheus endpoint (default address is [::]:<port>)
-    """
-    parser = argparse.ArgumentParser(
-        description="Track NFS statistics by process",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=examples)
-    parser.add_argument("-i", "--interval", default=5,
-            help="output interval, in seconds")
-    parser.add_argument("-v", "--vaccum", default=600,
-            help="pid env map vaccum interval, in seconds")
-    parser.add_argument("-e", "--envs", type=split_list,
-            help="comma separated list of env vars")
-    parser.add_argument("--debug", action="store_true",
-            help="enable debug prints")
-    parser.add_argument("--ebpf", action="store_true",
-            help="dump BPF program text and exit")
-    parser.add_argument("-P", "--prometheus", action="store_true",
-            help="start a prometheus exporter")
-    parser.add_argument("-p", "--prometheus-port", default=9000,
-            help="prometheus exporter port")
-    parser.add_argument("-o", "--output", choices=["screen"],
-            default="screen", help="samples output target")
-    parser.add_argument("-C", "--cfg", default=CFG_FILE,
-            help="config yaml (defaults to {})".format(CFG_FILE))
-    args = parser.parse_args()
-    try:
-        with open(args.cfg, 'r') as f:
-            cfg_opts = yaml.safe_load(f)
-            if cfg_opts:
-                args = parser.parse_args(namespace=argparse.Namespace(**cfg_opts))
-    except:
-        pass
-    debug=args.debug
-
-    # read BPF program text
-    bpf_text = open("nfsops.c").read()
-    if debug or args.ebpf:
-        print(bpf_text)
-        if args.ebpf:
-            exit()
-
-    signal.signal(signal.SIGTERM, sighandler)
-    signal.signal(signal.SIGINT, sighandler)
-
-    # probe needed modules (nfsv4 autoloads nfs)
-    os.system("/usr/sbin/modprobe kheaders")
-    os.system("/usr/sbin/modprobe nfsv4")
-    # initialize BPF
-    bpf = BPF(text=bpf_text)
-
-    pidEnvMap = PidEnvMap(vaccum_interval=args.vaccum)
-    mountsMap = MountsMap()
-    # if no envs are given, no need to track
-    if args.envs:
-        envTracer = EnvTracer(envs=args.envs, bpf=bpf, PidEnvMap=pidEnvMap)
-        envTracer.attach()
-        envTracer.start()
-
-    if args.output == "screen":
-        output = ScreenOutputTarget()
-    if args.prometheus:
-        collector = PrometheusExporter(bpf=bpf, PidEnvMap=pidEnvMap,
-                                OutputTarget=output, interval=args.interval)
-    else:
-        collector = StatsCollector(bpf=bpf, PidEnvMap=pidEnvMap,
-                                OutputTarget=output, interval=args.interval)
-    collector.attach()
-    collector.start()
-
-    while True:
-        try:
-            sleep(args.interval)
-        except:
-            print("bye bye")
-            exit(0)
+        return pd.DataFrame(statistics)

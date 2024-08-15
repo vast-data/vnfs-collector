@@ -1,38 +1,51 @@
 Name:           vnfs-collector
-Version:        0.0.1
+Version:        %{_version}
 Release:        1%{?dist}
-Summary:        NFS metrics collector based on ebpf
+Summary:        NFS metrics collector based on eBPF
 BuildArch:      noarch
-License:        GPL
+License:        Apache-2.0
 Provides:       vnfs-collector
-Requires:       python3 python3-bcc python3-psutil python3-prometheus_client
+Requires:       python3 python3-bcc >= 0.23.0
 Requires(post): systemd
 
 %description
-ebpf based metrics collector that tracks NFS operations per process/mount
-with ability to route statistics to multiple sinks such as vast native DB,
-prometheus and more as well outputing to a local log file or stdout.
+eBPF-based metrics collector that tracks NFS operations per process/mount
+with the ability to route statistics to multiple sinks such as Vast native DB,
+Prometheus, and more, as well as outputting to a local log file or stdout.
+
+%prep
+# No preparatory steps needed in this case.
 
 %install
 rm -rf %{buildroot}
-mkdir -p %{buildroot}/opt/vnfs-collector
-install -m 0755 %{_sourcedir}/nfsops.py %{_sourcedir}/nfsops.c %{buildroot}/opt/vnfs-collector/
-install -m 0644 %{_sourcedir}/nfsops.yaml %{buildroot}/opt/vnfs-collector/
-mkdir -p %{buildroot}/etc/systemd/system/
-install -m 0755 %{_sourcedir}/systemd/vnfs-collector.service %{buildroot}/etc/systemd/system
+mkdir -p %{buildroot}/opt/vnfs-collector/src/hack
+
+# Extract version from version.txt
+
+pname=vnfs-collector
+pylib_wheel=vast_client_tools-%{_version}-py3-none-any.whl
+
+# Install the tarball and other files
+install -m 755 %{_sourcedir}/dist/$pylib_wheel %{buildroot}/opt/$pname/src/
+install -m 755 %{_sourcedir}/version.txt %{buildroot}/opt/$pname/src/
+install -m 755 %{_sourcedir}/nfsops.yaml %{buildroot}/opt/$pname/
+install -m 644 %{_sourcedir}/systemd/$pname.service %{buildroot}/opt/$pname/src/
+cp -r %{_sourcedir}/hack/* %{buildroot}/opt/$pname/src/hack/
 
 %files
-%dir /opt/vnfs-collector
-/opt/vnfs-collector/nfsops.yaml
-/opt/vnfs-collector/nfsops.py
-/opt/vnfs-collector/nfsops.c
-/etc/systemd/system/vnfs-collector.service
+/opt/vnfs-collector
 
 %post
-if [ $1 -eq 1 ]; then # 1 : This package is being installed for the first time
-       systemctl daemon-reload
-fi
+#!/bin/bash
+set -e
+/opt/vnfs-collector/src/hack/pack_install.sh
+
+%preun
+#!/bin/bash
+set -e
+/opt/vnfs-collector/src/hack/pack_uninstall.sh
+
 
 %changelog
-* Thu Jul  11 2024 Sagi Grimberg <sagi@grimberg.me> - 0.0.1
+* Thu Jul 11 2024 Sagi Grimberg <sagi@grimberg.me> - 1.0
 - First version being packaged

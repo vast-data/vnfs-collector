@@ -1,9 +1,21 @@
-# yaml format of nfsops input arguments here
-# for example:
-# ---
-# output: "logfile"
-# envs:
+#envs:
 # - JOBID
 # - SCHEDID
 # - POD_NAME
-# prometheus_port: 9000
+interval: 5
+vaccum: 600
+screen: {}
+file:
+  samples_path: /opt/vnfs-collector/vnfs-collector.log
+  max_backups: 5
+  max_size_mb: 200
+#vdb:
+#  db_endpoint: http://vippool-1.vast217-az.VastENG.lab
+#  db_access_key: 55G3ZXQ5RRXVDW58I207
+#  db_secret_key: +D2ChyTd1xeIaULSXl/BaBDsP+8TUsx/rL31APmb
+#  db_bucket: nfsops-metrics
+#  db_schema: nfsops
+#  db_table: nfsops
+prometheus:
+  prometheus_host: 0.0.0.0
+  prometheus_port: 9000

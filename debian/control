@@ -3,9 +3,8 @@ Section: unknown
 Priority: extra
 Maintainer: Vast Data
 Build-Depends: debhelper
-#Version: 0.1
 
 Package: vnfs-collector
 Architecture: all
-Depends: python3, python3-bpfcc, python3-psutil, python3-prometheus-client, systemd
+Depends: python3, python3-venv, python3-bpfcc (>= 0.23.0), systemd
 Description: ebpf based metrics collector that tracks NFS operations per process/mount with ability to route statistics to multiple sinks such as vast native DB, prometheus and more as well outputing to a local log file or stdout.

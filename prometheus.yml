@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 60s
+
+scrape_configs:
+  - job_name: 'vnfs-collector'
+    static_configs:
+      - targets: ['vnfs-collector:9000']
