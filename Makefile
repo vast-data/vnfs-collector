@@ -28,3 +28,6 @@ clean:
 
 up:
 	@export VERSION=$(VERSION) && docker compose up
+
+docker_build: deb
+	@docker build -f docker/debian.Dockerfile -t vnfs-collector --build-arg="VERSION=${VERSION}" .
