@@ -1,15 +1,29 @@
-FROM docker:latest
+FROM python:3.12-slim-bookworm
 
-RUN apk add --no-cache \
-        python3 \
-        py3-pip \
-        make \
-        build-base \
-        curl \
-        rpm \
-        fakeroot \
-        dpkg-dev \
-        bash
+# Install dependencies and Docker
+RUN apt-get update && \
+    apt-get install -y \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release \
+    build-essential \
+    rpm \
+    rpm2cpio \
+    debhelper \
+    dh-make \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add - \
+    && echo "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y \
+    docker-ce \
+    docker-ce-cli \
+    containerd.io \
+    && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip to the latest version
+# Verify Docker installation
+RUN docker --version
+
+# Upgrade pip and install Python packages
 RUN python3 -m pip install --upgrade pip pytest build --break-system-packages
