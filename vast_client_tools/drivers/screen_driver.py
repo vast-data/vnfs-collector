@@ -18,7 +18,9 @@ class ScreenDriver(DriverBase):
 
     async def store_sample(self, data):
         if self.common_args.squash_pid:
-            data = group_stats(data, ["PID", "MOUNT"])
+            data = group_stats(data, ["MOUNT", "COMM"])
+        else:
+            data = group_stats(data, ["PID", "MOUNT", "COMM"])
         if self.table_format:
             output = data.T.to_string(index=False)
         else:

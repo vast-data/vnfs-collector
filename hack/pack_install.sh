@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Redirect stderr to both a file and the console
+exec 2> >(tee -a "/opt/vnfs-collector/src/errorlog" >&2)
+
 # Define paths
 VENV_PATH="/opt/vnfs-collector/src/venv"
 SYMLINK_PATH="/usr/local/bin/vnfs-collector"
@@ -24,7 +27,7 @@ python3 -m venv "${VENV_PATH}"
 source "${VENV_PATH}/bin/activate"
 pip install --upgrade pip || true
 pip install --upgrade Cython || true
-pip install "${PY_WHEEL}" && rm -f "${PY_WHEEL}"
+pip install "${PY_WHEEL}"
 python3 -c "from vast_client_tools.link_bcc import link_bcc; link_bcc()"
 deactivate
 

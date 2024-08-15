@@ -1,5 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 set -e
+
+# Redirect stderr to both a file and the console
+exec 2> >(tee -a "/opt/vnfs-collector/src/errorlog" >&2)
 
 # Define variables
 SERVICE_NAME="vnfs-collector"

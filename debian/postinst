@@ -1,4 +1,4 @@
 #!/bin/bash
 set -e
 
-/opt/vnfs-collector/src/hack/pack_install.sh 2> >(tee -a "/opt/vnfs-collector/src/errorlog" >&2)
+/opt/vnfs-collector/src/hack/pack_install.sh

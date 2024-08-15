@@ -1,7 +1,7 @@
-envs:
- - JOBID
- - SCHEDID
- - POD_NAME
+#envs:
+# - JOBID
+# - SCHEDID
+# - POD_NAME
 interval: 5
 vaccum: 600
 screen: {}

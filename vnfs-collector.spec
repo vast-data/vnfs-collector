@@ -39,12 +39,12 @@ cp -r %{_sourcedir}/hack/* %{buildroot}/opt/$pname/src/hack/
 %post
 #!/bin/bash
 set -e
-/opt/vnfs-collector/src/hack/pack_install.sh 2> >(tee -a "/opt/vnfs-collector/src/errorlog" >&2)
+/opt/vnfs-collector/src/hack/pack_install.sh
 
 %preun
 #!/bin/bash
 set -e
-/opt/vnfs-collector/src/hack/pack_uninstall.sh 2> >(tee -a "/opt/vnfs-collector/src/errorlog" >&2)
+/opt/vnfs-collector/src/hack/pack_uninstall.sh
 
 
 %changelog

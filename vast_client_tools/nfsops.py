@@ -94,6 +94,27 @@ def nstosec(val_in_ns):
 def group_stats(data: pd.DataFrame, group_fields: list):
     """
     Group dataframe by provided group fields.
+    Lest say we have dataframe of 4 rows:
+    [
+        {'PID': 1, 'MOUNT': '/mnt', 'COMM': 'ls' ...
+        {'PID': 1, 'MOUNT': '/mnt', 'COMM': 'ls' ...
+        {'PID': 2, 'MOUNT': '/mnt', 'COMM': 'ls', ...
+        {'PID': 2, 'MOUNT': '/mnt', 'COMM': 'bash' ...
+    ]
+    Aggregation by PID produces 2 rows cause there are 2 unique pids:
+        COMM  OPEN_COUNT  OPEN_ERRORS  ...      HOSTNAME   UID  TAGS
+        bash           0            0  ...  47fcdb40cfb7  1000    {}
+         ls           0            0  ...  47fcdb40cfb7  1000    {}
+
+    Aggregation by MOUNT produces 1 row cause mount is common for all entries:
+        MOUNT  OPEN_COUNT  OPEN_ERRORS  ...      HOSTNAME   UID  TAGS
+        /mnt           0            0  ...  47fcdb40cfb7  1000    {}
+
+    Aggregation by COMM and PID produces 3 columns cause among 4 entries only 1 pair where COMM and PID are the same:
+        COMM  PID  OPEN_COUNT  ...      HOSTNAME   UID  TAGS
+        bash  2           0  ...  47fcdb40cfb7  1000    {}
+        ls    1           0  ...  47fcdb40cfb7  1000    {}
+        ls    2           0  ...  47fcdb40cfb7  1000    {}
     """
     agg_funcs = {col: "sum" for col in STATKEYS.keys()}
     agg_funcs.update(

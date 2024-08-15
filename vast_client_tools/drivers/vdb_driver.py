@@ -51,7 +51,9 @@ class VdbDriver(DriverBase):
 
     async def store_sample(self, data):
         if self.common_args.squash_pid:
-            data = group_stats(data, ["PID", "MOUNT"])
+            data = group_stats(data, ["MOUNT", "COMM"])
+        else:
+            data = group_stats(data, ["PID", "MOUNT", "COMM"])
         record_batch = pa.RecordBatch.from_pandas(df=data, schema=self.get_columns())
         self.vastapi.insert(
             bucket=self.db_bucket, schema=self.db_schema, table=self.db_table, record_batch=record_batch

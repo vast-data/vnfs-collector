@@ -12,7 +12,7 @@ class FileDriver(DriverBase):
     parser.add_argument(
         '--samples-path',
         help='Absolute or relative path to file where samples will be stored.',
-        default="/opt/vnfs-collector"
+        default="/opt/vnfs-collector/vnfs-collector.log"
     )
     parser.add_argument(
         '--max-backups',
@@ -56,6 +56,8 @@ class FileDriver(DriverBase):
 
     async def store_sample(self, data):
         if self.common_args.squash_pid:
-            data = group_stats(data, ["PID", "MOUNT"])
+            data = group_stats(data, ["MOUNT", "COMM"])
+        else:
+            data = group_stats(data, ["PID", "MOUNT", "COMM"])
         for _, entry in data.iterrows():
             self.samples_logger.debug(entry.to_json())
