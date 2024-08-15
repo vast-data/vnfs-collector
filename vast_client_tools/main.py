@@ -188,12 +188,22 @@ async def _exec():
         envTracer.attach()
         envTracer.start()
 
-    collector.attach()
-    logger.info("All good! StatsCollector has been attached.")
-
     # probe needed modules (nfsv4 autoloads nfs)
-    os.system("/usr/sbin/modprobe kheaders")
-    os.system("/usr/sbin/modprobe nfsv4")
+    os.system(f"/usr/sbin/modprobe kheaders  > {os.devnull} 2>&1")
+    os.system(f"/usr/sbin/modprobe nfsv4 > {os.devnull} 2>&1")
+
+    while True:
+        try:
+            collector.attach()
+            break
+        except Exception as e:
+            if "Failed to attach" in str(e):
+                logger.error(f"{e}. Do you have any mounts?")
+                await asyncio.sleep(10)
+                continue
+            raise
+
+    logger.info("All good! StatsCollector has been attached.")
 
     while True:
         await asyncio.sleep(args.interval)
