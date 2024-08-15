@@ -3,7 +3,6 @@ Section: unknown
 Priority: extra
 Maintainer: Vast Data
 Build-Depends: debhelper
-#Version: 0.1
 
 Package: vnfs-collector
 Architecture: all

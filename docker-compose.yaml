@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: docker/debian.Dockerfile
+      args:
+        VERSION: ${VERSION:-1.0}
     privileged: true
     command:
       - -C
