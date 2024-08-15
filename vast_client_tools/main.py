@@ -197,7 +197,7 @@ async def _exec():
 
     while True:
         await asyncio.sleep(args.interval)
-        data = collector.collect_stats()
+        data = collector.collect_stats(squash_pid=args.squash_pid)
         if data.empty:
             continue
         await asyncio.gather(*mgr.map_method("store_sample", data=data))

@@ -317,7 +317,7 @@ class StatsCollector:
             self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattr count
             self.b.attach_kretprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
 
-    def collect_stats(self):
+    def collect_stats(self, squash_pid=False):
         timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         logger.info(f"######## collect sample ########")
 
@@ -397,4 +397,19 @@ class StatsCollector:
         if not self.batch_ops:
             counts.clear()
 
-        return pd.DataFrame(statistics)
+        df = pd.DataFrame(statistics)
+        if not df.empty:
+            if squash_pid:
+                # aggregation by command, tags and mount.
+                # Pid will be squashed eg, if we have the same command but different pids
+                #   COMM TAGS MOUNT  OPEN_COUNT  OPEN_ERRORS  OPEN_DURATION  CLOSE_COUNT ...
+                #   ls   {}   /mnt            0            0            0.0            0 ...
+                df = group_stats(df, ["MOUNT", "COMM", "TAGS"])
+            else:
+                # Statistics is aggregated by mount pig and tags. Eg if we have 4 ls commands.
+                # 2 with PID=2811828 and 2 with PID=2811867
+                #   COMM TAGS MOUNT      PID  OPEN_COUNT  OPEN_ERRORS  OPEN_DURATION  CLOSE_COUNT ...
+                #   ls   {}        2811828           0            0            0.0            0 ...
+                #   ls   {}        2811867           0            0            0.0            0 ...
+                df = group_stats(df, ["MOUNT", "PID", "TAGS"])
+        return df

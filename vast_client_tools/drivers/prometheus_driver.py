@@ -14,8 +14,7 @@ except:
 from prometheus_client.core import GaugeMetricFamily
 
 from vast_client_tools.drivers.base import DriverBase
-from vast_client_tools.nfsops import STATKEYS, group_stats
-
+from vast_client_tools.nfsops import STATKEYS
 
 
 class PrometheusDriver(DriverBase, Collector):
@@ -89,19 +88,6 @@ class PrometheusDriver(DriverBase, Collector):
             self.logger.info(f"Found {samples_count} sample(s).")
             while self.local_buffer:
                 data = self.local_buffer.popleft()
-                if self.common_args.squash_pid:
-                    # aggregation by command, tags and mount.
-                    # Pid will be squashed eg, if we have the same command but different pids
-                    #   COMM TAGS MOUNT  OPEN_COUNT  OPEN_ERRORS  OPEN_DURATION  CLOSE_COUNT ...
-                    #   ls   {}                 0            0            0.0            0 ...
-                    data = group_stats(data, ["COMM", "TAGS", "MOUNT"])
-                else:
-                    # Statistics is aggregated by pid and command. Eg if we have 4 ls commands.
-                    # 2 with PID=2811828 and 2 with PID=2811867
-                    #   COMM TAGS MOUNT      PID  OPEN_COUNT  OPEN_ERRORS  OPEN_DURATION  CLOSE_COUNT ...
-                    #   ls   {}        2811828           0            0            0.0            0 ...
-                    #   ls   {}        2811867           0            0            0.0            0 ...
-                    data = group_stats(data, ["COMM", "TAGS", "MOUNT", "PID"])
                 for _, entry in data.iterrows():
                     labels_kwargs = {
                         "HOSTNAME": entry.HOSTNAME,
