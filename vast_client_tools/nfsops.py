@@ -317,7 +317,7 @@ class StatsCollector:
             self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattr count
             self.b.attach_kretprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
 
-    def collect_stats(self, squash_pid=False, filter_tags: list[str] = None, filter_condition: str = None):
+    def collect_stats(self, squash_pid=False, filter_tags=None, filter_condition=None):
         timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         logger.debug(f"######## collect sample ########")
 
