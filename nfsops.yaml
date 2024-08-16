@@ -1,4 +1,4 @@
-#envs:
+# envs:
 # - JOBID
 # - SCHEDID
 # - POD_NAME
@@ -9,13 +9,13 @@ file:
   samples_path: /opt/vnfs-collector/vnfs-collector.log
   max_backups: 5
   max_size_mb: 200
-#vdb:
+# vdb:
 #  db_endpoint: <endpoint>
 #  db_access_key: <access_key>
 #  db_secret_key: <secret_key>
 #  db_bucket: <bucket>
 #  db_schema: <schema>
 #  db_table: <table>
-prometheus:
-  prometheus_host: 0.0.0.0
-  prometheus_port: 9000
+# prometheus:
+#  prometheus_host: <host>
+#  prometheus_port: <port>

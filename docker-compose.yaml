@@ -18,6 +18,7 @@ services:
       - /usr/sbin:/usr/sbin:ro
       - /sys/fs:/sys/fs:ro
       - /sys/kernel:/sys/kernel:ro
+      - /proc:/proc:rw
 
   prometheus:
     image: prom/prometheus

@@ -172,7 +172,7 @@ This can be useful for testing and deployment in containerized environments.
   directory.
 ##### Start debian based container:
 ```bash
-docker build -f docker/debian.Dockerfile -t vnfs-collector .
+docker build --build-arg="VERSION=$(cat version.txt)" -f docker/debian.Dockerfile -t vnfs-collector .
 docker run \
   --privileged \
   --volume $(pwd):/opt/nfsops \
@@ -181,14 +181,29 @@ docker run \
   --volume /usr/sbin:/usr/sbin:ro \
   --volume /sys/fs:/sys/fs:ro \
   --volume /sys/kernel:/sys/kernel:ro \
+  --volume /proc:/proc:rw \
   --name vnfs-collector \
   -t vnfs-collector \
   -C nfsops.yaml
 ```
 
+Make sure you specified correct volume bindings:
+
+| Mount                              | Description                                                                                                                                                                                                                                                                            | Required |
+|------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| `$(pwd):/opt/nfsops`               | Binds the host working directory to the working directory of `vnfs-collector` within the Docker container. This is optional and is used if you want to pass full configuration from the host. CLI arguments can also be provided separately (e.g., `-envs "JOBID,MYENV" -interval 5`). | No       |
+| `/lib/modules:/lib/modules:ro`    | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
+| `/usr/src:/usr/src:ro`             | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
+| `/usr/sbin:/usr/sbin:ro`           | Required for `modprobe` execution.                                                                                                                                                                                                                                                     | Yes      |
+| `/sys/fs:/sys/fs:ro`               | Required for tracking active mounts.                                                                                                                                                                                                                                                   | Yes      |
+| `/sys/kernel:/sys/kernel:ro`       | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
+| `/proc:/proc:rw`                   | Required only if the `--envs` CLI flag is provided. This binding allows `vnfs-collector` to access environment variables per process.                                                                                                                                                  | No       |
+                                                                                                                         
+
+
 ##### Start rocky based container:
 ```bash
-docker build -f docker/rocky.Dockerfile -t vnfs-collector .
+docker build --build-arg="VERSION=$(cat version.txt)" -f docker/rocky.Dockerfile -t vnfs-collector .
 docker run \
   --privileged \
   --volume $(pwd):/opt/nfsops \
@@ -197,6 +212,7 @@ docker run \
   --volume /usr/sbin:/usr/sbin:ro \
   --volume /sys/fs:/sys/fs:ro \
   --volume /sys/kernel:/sys/kernel:ro \
+  --volume /proc:/proc:rw \
   --name vnfs-collector \
   -t vnfs-collector \
   -C nfsops.yaml

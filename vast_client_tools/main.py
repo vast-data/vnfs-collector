@@ -98,6 +98,12 @@ conf_parser.add_argument(
     help="Group statistics by PID."
 )
 conf_parser.add_argument(
+    "--tag-filter", type=str, choices=("all", "any"), default=None,
+    help="Specify how to filter statistics based on tags."
+         " Use 'all' to require all specified tag keys to match provided envs,"
+         " or 'any' to require at least one of the specified tag keys to match provided env."
+)
+conf_parser.add_argument(
     "-C", "--cfg", default=None,
     help="config yaml"
 )
@@ -117,9 +123,11 @@ async def _exec():
 
     drivers = args.driver
     if not drivers:
-        logger.error(f"No driver specified.")
-        conf_parser.print_help()
-        exit(0)
+        conf_parser.error("No driver specified.")
+
+    # Validate mutual dependencies
+    if args.tag_filter and not args.envs:
+        conf_parser.error("--tag-filter requires --envs to be specified.")
 
     logger.info(f"BPF version: {__version__}")
     logger.info(
@@ -207,7 +215,11 @@ async def _exec():
 
     while True:
         await asyncio.sleep(args.interval)
-        data = collector.collect_stats(squash_pid=args.squash_pid)
+        data = collector.collect_stats(
+            squash_pid=args.squash_pid,
+            filter_tags=args.envs,
+            filter_condition=args.tag_filter,
+        )
         if data.empty:
             continue
         await asyncio.gather(*mgr.map_method("store_sample", data=data))
