@@ -1,4 +1,6 @@
-from vast_client_tools.nfsops import group_stats, filter_stats
+import pytest
+from unittest.mock import patch
+from vast_client_tools.nfsops import group_stats, filter_stats, MountInfo, MountsMap
 
 import pandas.testing as pdt
 
@@ -83,3 +85,38 @@ def test_filter_stats_all(data):
     # No rows with such combination of tags
     filtered = filter_stats(data, filter_tags=["TAR", "JOB"], filter_condition="all")
     assert len(filtered) == 0
+
+
+@pytest.mark.parametrize("remote_path", ["/", "/mnt", "/mnt/test"])
+@pytest.mark.parametrize(
+    "addr",
+    [
+        "::",
+        "[::]",
+        "172.17.0.2",
+        "[2001::1]",
+        "mydomain",
+        "mydomain.com",
+        "mydomain.com:8080",
+    ],
+)
+def test_remote_path(addr, remote_path):
+    # Test with a standard device string
+    mount_info = MountInfo("/mnt/test", f"{addr}:{remote_path}")
+    assert mount_info.remote_path == remote_path
+
+
+@patch("pathlib.Path.exists", return_value=True)
+@patch("os.listdir", return_value=["dev1", "net", "dev2"])
+@patch(
+    "vast_client_tools.nfsops.MountsMap._findmount",
+    return_value=MountInfo("/mnt/test", "172.17.0.2:/mnt/test"),
+)
+def test_refresh_map(*_, **__):
+    mounts_map = MountsMap()
+    mounts_map.refresh_map()
+
+    # Check that the map was populated correctly
+    assert "dev1" in mounts_map.map
+    assert isinstance(mounts_map.map["dev1"], MountInfo)
+    assert mounts_map.map["dev1"].device == "172.17.0.2:/mnt/test"
