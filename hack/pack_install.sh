@@ -27,6 +27,7 @@ python3 -m venv "${VENV_PATH}"
 source "${VENV_PATH}/bin/activate"
 pip install --upgrade pip || true
 pip install --upgrade Cython || true
+pip install --upgrade setuptools || true
 pip install "${PY_WHEEL}"
 python3 -c "from vast_client_tools.link_bcc import link_bcc; link_bcc()"
 deactivate

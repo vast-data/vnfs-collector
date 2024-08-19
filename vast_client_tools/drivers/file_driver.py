@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
-from vast_client_tools.drivers.base import DriverBase
+from vast_client_tools.drivers.base import DriverBase, InvalidArgument
 from vast_client_tools.utils import iso_serializer
 
 class FileDriver(DriverBase):
@@ -43,6 +43,9 @@ class FileDriver(DriverBase):
 
         self.path = Path(args.samples_path)
         self.path.parent.mkdir(exist_ok=True)
+        if self.path.is_dir():
+            raise InvalidArgument(f"{self.path} is directory.")
+
         self.max_size_mb = args.max_size_mb
         self.max_backups = args.max_backups
         self.samples_logger.handlers = [

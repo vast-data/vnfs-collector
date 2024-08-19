@@ -30,7 +30,14 @@ else:
 
 
 class HelpFormatter(argparse.HelpFormatter):
+    """
+    Custom help formatter for argparse to format help messages with colors and additional information.
+    """
+
     def format_help(self):
+        """
+        Format the help message to include usage, options, and their descriptions.
+        """
         prog = self._prog
         usages = []
         help_text = []
@@ -55,7 +62,7 @@ class HelpFormatter(argparse.HelpFormatter):
             for action in parser._actions:
                 options = ", ".join(action.option_strings)
                 if "--driver" in options:
-                   required = required_mark
+                    required = required_mark
                 else:
                     required = required_mark if action.required else "  "
                 if action.choices:
@@ -115,6 +122,10 @@ conf_parser.add_argument(
 
 
 async def _exec():
+    """
+    Main execution function to set up and run the BPF program and drivers.
+    """
+    exit_error = None
     stop_event = asyncio.Event()
     args, remaining = conf_parser.parse_known_args()
     cfg_opts = None
@@ -183,11 +194,11 @@ async def _exec():
     try:
         await asyncio.gather(*setup_coros)
     except InvalidArgument as e:
-        logger.error(f"Setup failed: {e}")
+        exit_error = e
         conf_parser.print_help()
         on_exit()
-    except Exception:
-        logger.error(f"Setup failed", exc_info=True)
+    except Exception as e:
+        exit_error = e
         on_exit()
 
     if not stop_event.is_set():
@@ -229,6 +240,9 @@ async def _exec():
         await asyncio.gather(*mgr.map_method("store_sample", data=data))
 
     await asyncio.gather(*mgr.map_method("teardown"))
+    if exit_error:
+        logger.error("Setup failed")
+        raise exit_error
 
 def main():
     loop = asyncio.get_event_loop()

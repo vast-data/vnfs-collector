@@ -24,6 +24,19 @@ class hashabledict(dict):
     def __hash__(self):
         return hash(tuple(sorted(self.items())))
 
+    def __eq__(self, other):
+        if isinstance(other, hashabledict):
+            return dict(self) == dict(other)
+        return NotImplemented
+
+    def __lt__(self, other):
+        if isinstance(other, hashabledict):
+            return sorted(self.items()) < sorted(other.items())
+        return NotImplemented
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({dict(self)})"
+
 
 STATKEYS = {
         "OPEN_COUNT":       "Number of NFS OPEN calls",
@@ -94,6 +107,7 @@ def nstosec(val_in_ns):
 def group_stats(data: pd.DataFrame, group_fields: list):
     """
     Group dataframe by provided group fields.
+    Aggregates using sum for statistical columns and last for other columns.
     Lest say we have dataframe of 4 rows:
     [
         {'PID': 1, 'MOUNT': '/mnt', 'COMM': 'ls' ...
@@ -116,7 +130,9 @@ def group_stats(data: pd.DataFrame, group_fields: list):
         ls    1           0  ...  47fcdb40cfb7  1000    {}
         ls    2           0  ...  47fcdb40cfb7  1000    {}
     """
+    # Define aggregation functions for statistical fields
     agg_funcs = {col: "sum" for col in STATKEYS.keys()}
+    # Define aggregation functions for non-statistical fields
     agg_funcs.update(
         {
             col: "last"
@@ -126,6 +142,23 @@ def group_stats(data: pd.DataFrame, group_fields: list):
     )
     # Aggregate DataFrame
     return data.groupby(group_fields).agg(agg_funcs).reset_index()
+
+
+def filter_stats(data: pd.DataFrame, filter_tags: list, filter_condition: str):
+    """
+    Filter statistics based on tags.
+    """
+    if filter_condition == "any":
+        # Verifies if any of the filter tags are present in the TAGS dictionary
+        # and filters the DataFrame accordingly.
+        return data[data["TAGS"].apply(lambda tags: any(filter_tag in tags for filter_tag in filter_tags))]
+    elif filter_condition == "all":
+        # Verifies if all the filter tags are present in the TAGS dictionary
+        # and filters the DataFrame based on this condition.
+        return data[data["TAGS"].apply(lambda tags: all(filter_tag in tags for filter_tag in filter_tags))]
+    else:
+        raise NotImplementedError(f"Filter condition {filter_condition} is not implemented.")
+
 
 
 class MountsMap:
@@ -399,14 +432,8 @@ class StatsCollector:
 
         df = pd.DataFrame(statistics)
         if not df.empty:
-            if filter_condition == "any":
-                # Verifies if any of the filter tags are present in the TAGS dictionary
-                # and filters the DataFrame accordingly.
-                df = df[df["TAGS"].apply(lambda tags: any(filter_tag in tags for filter_tag in filter_tags))]
-            elif filter_condition == "all":
-                # Verifies if all the filter tags are present in the TAGS dictionary
-                # and filters the DataFrame based on this condition.
-                df = df[df["TAGS"].apply(lambda tags: all(filter_tag in tags for filter_tag in filter_tags))]
+            if filter_condition:
+                df = filter_stats(data=df, filter_tags=filter_tags, filter_condition=filter_condition)
             if squash_pid:
                 # aggregation by command, tags and mount.
                 # Pid will be squashed eg, if we have the same command but different pids

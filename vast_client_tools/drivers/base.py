@@ -11,7 +11,7 @@ class InvalidArgument(Exception):
 def get_val_or_raise(args, key):
     val = getattr(args, key)
     if val is None:
-        raise InvalidArgument(f"Missing required argument: {key}")
+        raise InvalidArgument(f"the following arguments are required: --{key}")
     return val
 
 
@@ -44,6 +44,25 @@ class DriverBase(abc.ABC):
                         setattr(namespace, dest, action.default)
                     if action.required:
                         get_val_or_raise(namespace, dest)
+                # Validate choices if available
+                if action.choices:
+                    value = getattr(namespace, dest, argparse.SUPPRESS)
+                    if value != argparse.SUPPRESS and value not in action.choices:
+                        raise InvalidArgument(
+                            f"invalid choice '{value}' for argument '--{dest}'. Must be one of {action.choices}."
+                        )
+                # Validate integer types
+                if action.type == int:
+                    value = getattr(namespace, dest, argparse.SUPPRESS)
+                    if value != argparse.SUPPRESS:
+                        try:
+                            # Ensure value can be converted to int and fits the integer type
+                            int_value = int(value)
+                            setattr(namespace, dest, int_value)
+                        except ValueError:
+                            raise InvalidArgument(
+                                f"invalid int value '{value}' for argument '--{dest}'."
+                            )
             return namespace
         try:
             args, _ = self.parser.parse_known_args(args)
