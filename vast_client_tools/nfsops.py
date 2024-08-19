@@ -318,7 +318,7 @@ class StatsCollector:
             self.b.attach_kretprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
 
     def collect_stats(self, squash_pid=False, filter_tags=None, filter_condition=None):
-        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        timestamp = pd.Timestamp.utcnow().astimezone(None).floor("s")
         logger.debug(f"######## collect sample ########")
 
         counts = self.b.get_table("counts")

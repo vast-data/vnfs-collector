@@ -8,9 +8,8 @@ services:
       args:
         VERSION: ${VERSION:-1.0}
     privileged: true
-    command:
-      - -C
-      - /opt/vnfs-collector/nfsops.yaml
+    entrypoint: [ "./scripts/wait-for-it.sh", "kafka:9092", "--" ]
+    command: [ "vnfs-collector", "-C", "/opt/vnfs-collector/nfsops.yaml" ]
     volumes:
       - .:/opt/nfsops
       - /lib/modules:/lib/modules:ro
@@ -19,9 +18,12 @@ services:
       - /sys/fs:/sys/fs:ro
       - /sys/kernel:/sys/kernel:ro
       - /proc:/proc:rw
+    depends_on:
+      - kafka
+      - prometheus
 
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus:latest
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
@@ -29,3 +31,94 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
     restart: always
+
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 9094:8080
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_LOCATION: /kafka.keystore.jks
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD: "password"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_SSL_TRUSTSTORELOCATION: /kafka.truststore.jks
+      KAFKA_CLUSTERS_0_SSL_TRUSTSTOREPASSWORD: "password"
+      KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
+      KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="kafka" password="CMwvKfeVJociGkSToMZQ";
+      KAFKA_CLUSTERS_0_PROPERTIES_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ''
+    volumes:
+      - './certs/keystore/kafka.keystore.jks:/kafka.keystore.jks'
+      - './certs/truststore/kafka.truststore.jks:/kafka.truststore.jks'
+
+  zookeeper:
+    image: bitnami/zookeeper:3.6
+    ports:
+      - 2181:2181
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka:
+    image: bitnami/kafka
+    hostname: kafka
+    ports:
+      - 9092:9092  # Expose SASL_SSL port
+      - 9093:9093  # Controller communication port
+    environment:
+      # Kafka Configuration
+      - KAFKA_CFG_LISTENERS=SASL_SSL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=SASL_SSL://kafka:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=SASL_SSL:SASL_SSL,CONTROLLER:SASL_PLAINTEXT
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=SASL_SSL
+      - KAFKA_CFG_SASL_MECHANISM_INTER_BROKER_PROTOCOL=PLAIN
+      - KAFKA_CFG_SASL_ENABLED_MECHANISMS=PLAIN
+      - KAFKA_CFG_SASL_MECHANISM_CONTROLLER_PROTOCOL=PLAIN
+      - KAFKA_CFG_SSL_KEYSTORE_LOCATION=/bitnami/kafka/config/certs/kafka.keystore.jks
+      - KAFKA_CFG_SSL_KEYSTORE_PASSWORD=password
+      - KAFKA_CFG_SSL_TRUSTSTORE_LOCATION=/bitnami/kafka/config/certs/kafka.truststore.jks
+      - KAFKA_CFG_SSL_TRUSTSTORE_PASSWORD=password
+      - KAFKA_CFG_SSL_KEY_PASSWORD=password
+      # SASL Authentication
+      - KAFKA_CLIENT_USERS=user_kafka
+      - KAFKA_CLIENT_PASSWORDS=secret
+      - KAFKA_INTER_BROKER_USER=kafka
+      - KAFKA_INTER_BROKER_PASSWORD=CMwvKfeVJociGkSToMZQ
+      - KAFKA_CONTROLLER_USER=kafka
+      - KAFKA_CONTROLLER_PASSWORD=CMwvKfeVJociGkSToMZQ
+      # Zookeeper Configuration
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+    volumes:
+      - './certs/keystore/kafka.keystore.jks:/bitnami/kafka/config/certs/kafka.keystore.jks:ro'
+      - './certs/truststore/kafka.truststore.jks:/bitnami/kafka/config/certs/kafka.truststore.jks:ro'
+    depends_on:
+      - zookeeper
+
+  # SASL_PLAINTEXT
+  #  kafka:
+  #    image: bitnami/kafka:2.8.1
+  #    ports:
+  #      - '9093:9093'
+  #    environment:
+  #      - ALLOW_PLAINTEXT_LISTENER=no
+  #      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+  #      - KAFKA_CFG_LISTENERS=INTERNAL://:9092,CLIENT://:9093,
+  #      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,CLIENT://localhost:9093
+  #      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+  #      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT
+  #      - KAFKA_CFG_SASL_MECHANISM_INTER_BROKER_PROTOCOL=PLAIN
+  #      # Client credentials
+  #      - KAFKA_CLIENT_USERS=user_kafka
+  #      - KAFKA_CLIENT_PASSWORDS=secret
+  #      # Broker credentials
+  #      - KAFKA_INTER_BROKER_USER=kafka
+  #      - KAFKA_INTER_BROKER_PASSWORD=CMwvKfeVJociGkSToMZQ
+  #      # Zookeeper credentials
+  #      - KAFKA_ZOOKEEPER_PROTOCOL=SASL
+  #      - KAFKA_ZOOKEEPER_USER=kafka
+  #      - KAFKA_ZOOKEEPER_PASSWORD=secret
+  #    depends_on:
+  #      - zookeeper

@@ -3,7 +3,6 @@ import sys
 import logging
 import argparse
 import asyncio
-import signal
 from pathlib import Path
 try:
     from importlib import metadata
@@ -16,6 +15,7 @@ from stevedore.named import NamedExtensionManager, ExtensionManager
 
 from vast_client_tools.logger import COLORS
 from vast_client_tools.drivers import InvalidArgument
+from vast_client_tools.utils import set_signal_handler, await_until_event_or_timeout
 from vast_client_tools.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTracer, logger
 
 
@@ -29,16 +29,12 @@ else:
     ENTRYPOINTS = entry_points.get(ENTRYPOINT_GROUP, [])
 
 
-def set_signal_handler(handler):
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
-
-
 class HelpFormatter(argparse.HelpFormatter):
     def format_help(self):
         prog = self._prog
         usages = []
         help_text = []
+        required_mark = " " + COLORS.intense_red("\u26A0")
         # Helper function to clean up usage strings
         strip = lambda txt: txt.replace(prog, "").replace("[-h]", "").strip("usage:").strip()
         # Gather all parsers and their actions
@@ -58,10 +54,20 @@ class HelpFormatter(argparse.HelpFormatter):
             max_option_length = max(len(", ".join(action.option_strings)) for action in parser._actions)
             for action in parser._actions:
                 options = ", ".join(action.option_strings)
+                if "--driver" in options:
+                   required = required_mark
+                else:
+                    required = required_mark if action.required else "  "
+                if action.choices:
+                    choices = f" {COLORS.yellow('[ choices')}: {', '.join(map(str, action.choices))} {COLORS.yellow(']')}"
+                else:
+                    choices = ""
                 default_text = f" {COLORS.green('[ default')}: {action.default!r} {COLORS.green(']')}" if (action.default is not None and action.default != argparse.SUPPRESS) else ""
-                help_text.append(f"  {options.ljust(max_option_length)}: {action.help}{default_text}")
+                help_section = f"{action.help}{choices}{default_text}"
+                help_section = ("\n" + " " * (max_option_length + 5 )).join(help_section.splitlines())
+                help_text.append(f"  {options.ljust(max_option_length)}:{required} {help_section}")
         # Construct the final help message
-        return f"Usage: {prog} " + " ".join(usages) +  "\n" + "\n".join(help_text) + "\n\n"
+        return f"Usage: {prog} " + " ".join(usages) + f"\n\n({required_mark} - option is required if driver is enabled )" + "\n".join(help_text) + "\n\n"
 
 
 available_drivers = sorted(set([e.name for e in ENTRYPOINTS]))
@@ -69,7 +75,6 @@ conf_parser = argparse.ArgumentParser(formatter_class=HelpFormatter)
 conf_parser.add_argument(
     '-d', '--driver',
     help="Driver to enable. "
-         f"Available options: {available_drivers}. "
          f"User can specify multiple options.",
     choices=available_drivers, action='append', required=False,
 )
@@ -95,21 +100,22 @@ conf_parser.add_argument(
 )
 conf_parser.add_argument(
     "--squash-pid", type=bool, default=True,
-    help="Group statistics by PID."
+    help="Squash PIDs during statistics aggregation. This will group statistics by command, mount, and tags."
 )
 conf_parser.add_argument(
     "--tag-filter", type=str, choices=("all", "any"), default=None,
-    help="Specify how to filter statistics based on tags."
-         " Use 'all' to require all specified tag keys to match provided envs,"
-         " or 'any' to require at least one of the specified tag keys to match provided env."
+    help="Specify how to filter statistics based on tags.\n"
+         "- `all`: Requires all specified tag keys to match provided envs.\n"
+         "- `any`: Requires at least one of the specified tag keys to match provided env.\n"
 )
 conf_parser.add_argument(
     "-C", "--cfg", default=None,
-    help="config yaml"
+    help="Config yaml. When provided it takes precedence over command line arguments."
 )
 
 
 async def _exec():
+    stop_event = asyncio.Event()
     args, remaining = conf_parser.parse_known_args()
     cfg_opts = None
     if args.cfg:
@@ -165,14 +171,8 @@ async def _exec():
 
     def on_exit(sig=None, frame=None):
         """Teardown drivers gracefully on exit"""
-        if sig:
-            signals = dict(
-                (getattr(signal, n), n) for n in dir(signal) if n.startswith("SIG") and "_" not in n
-            )
-            sig_name = signals[sig]
-            logger.info(f"Got signal {sig_name!r}. Terminating...")
-        mgr.map_method("teardown")
-        exit(0)
+        logger.info("Exiting...")
+        stop_event.set()
 
     set_signal_handler(on_exit)
 
@@ -190,31 +190,35 @@ async def _exec():
         logger.error(f"Setup failed", exc_info=True)
         on_exit()
 
-    # if no envs are given, no need to track
-    if args.envs:
-        envTracer = EnvTracer(envs=args.envs, bpf=bpf, pid_env_map=pidEnvMap)
-        envTracer.attach()
-        envTracer.start()
+    if not stop_event.is_set():
+        # if no envs are given, no need to track
+        if args.envs:
+            envTracer = EnvTracer(envs=args.envs, bpf=bpf, pid_env_map=pidEnvMap)
+            envTracer.attach()
+            envTracer.start()
 
-    # probe needed modules (nfsv4 autoloads nfs)
-    os.system(f"/usr/sbin/modprobe kheaders  > {os.devnull} 2>&1")
-    os.system(f"/usr/sbin/modprobe nfsv4 > {os.devnull} 2>&1")
+        # probe needed modules (nfsv4 autoloads nfs)
+        os.system(f"/usr/sbin/modprobe kheaders  > {os.devnull} 2>&1")
+        os.system(f"/usr/sbin/modprobe nfsv4 > {os.devnull} 2>&1")
 
-    while True:
-        try:
-            collector.attach()
+        while True:
+            try:
+                collector.attach()
+                break
+            except Exception as e:
+                if "Failed to attach" in str(e):
+                    logger.error(f"{e}. Do you have any mounts?")
+                    await asyncio.sleep(10)
+                    continue
+                raise
+
+        logger.info("All good! StatsCollector has been attached.")
+
+    while not stop_event.is_set():
+        canceled = await await_until_event_or_timeout(timeout=args.interval, stop_event=stop_event)
+        if canceled:
             break
-        except Exception as e:
-            if "Failed to attach" in str(e):
-                logger.error(f"{e}. Do you have any mounts?")
-                await asyncio.sleep(10)
-                continue
-            raise
 
-    logger.info("All good! StatsCollector has been attached.")
-
-    while True:
-        await asyncio.sleep(args.interval)
         data = collector.collect_stats(
             squash_pid=args.squash_pid,
             filter_tags=args.envs,
@@ -224,6 +228,7 @@ async def _exec():
             continue
         await asyncio.gather(*mgr.map_method("store_sample", data=data))
 
+    await asyncio.gather(*mgr.map_method("teardown"))
 
 def main():
     loop = asyncio.get_event_loop()

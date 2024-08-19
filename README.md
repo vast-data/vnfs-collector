@@ -150,7 +150,7 @@ prometheus:
   prometheus_port: 9000
 ```
 
-**screen**, **file**, **vdb**, and **prometheus** are the names of
+**screen**, **file**, **vdb**, **kafka** and **prometheus** are the names of
 appropriate drivers.
 
 Note: **screen** driver in this example is empty section:
