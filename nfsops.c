@@ -88,9 +88,6 @@ static struct stats_t *get_stats(u64 *start_time, u64 *byte_count)
 	*start_time = startp->start;
 	if (byte_count)
 		*byte_count = startp->count;
-	//u32 s_dev = startp->inode->i_sb->s_dev;
-	// delete the start from the map, no need for it
-	starts.delete(&pid);
 
 	struct info_t info = {
 		.pid = pid,
@@ -99,6 +96,9 @@ static struct stats_t *get_stats(u64 *start_time, u64 *byte_count)
 		.sbdev = startp->inode->i_sb->s_dev,
 	};
 	bpf_get_current_comm(&info.comm, sizeof(info.comm));
+
+	// delete the start from the map, no need for it
+	starts.delete(&pid);
 
 	struct stats_t zero = {};
 	return counts.lookup_or_try_init(&info, &zero);
