@@ -51,5 +51,5 @@ class DriverBase(abc.ABC):
         except SystemExit as e:
             raise InvalidArgument() from e
 
-    def teardown(self):
+    async def teardown(self):
         pass

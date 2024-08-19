@@ -1,7 +1,6 @@
 import argparse
 
 import pyarrow as pa
-from vastdb.api import VastdbApi
 
 from vast_client_tools.drivers.base import DriverBase
 
@@ -27,6 +26,8 @@ class VdbDriver(DriverBase):
         )
 
     async def setup(self, args=(), namespace=None):
+        from vastdb.api import VastdbApi
+
         args = await super().setup(args, namespace)
         self.db_endpoint = args.db_endpoint.strip("http://").strip("https://")
         db_access_key = args.db_access_key
@@ -57,7 +58,7 @@ class VdbDriver(DriverBase):
     @classmethod
     def get_columns(cls):
         return pa.schema([
-            ('TIMESTAMP', pa.utf8()),
+            ('TIMESTAMP', pa.timestamp('s')),
             ('HOSTNAME', pa.utf8()),
             ('PID', pa.int32()),
             ('UID', pa.int32()),

@@ -1,6 +1,8 @@
+import json
 import argparse
 
 from vast_client_tools.drivers.base import DriverBase
+from vast_client_tools.utils import iso_serializer
 
 
 class ScreenDriver(DriverBase):
@@ -19,5 +21,5 @@ class ScreenDriver(DriverBase):
         if self.table_format:
             output = data.T.to_string(index=False)
         else:
-            output = "\n".join(str(d.to_dict()) for _, d in data.iterrows())
+            output = "\n".join(json.dumps(d.to_dict(), default=iso_serializer) for _, d in data.iterrows())
         self.logger.info(f">>>\n{output}")

@@ -58,7 +58,7 @@ class PrometheusDriver(DriverBase, Collector):
             self.exporter = exporter[0]
         self.logger.info(f"{self} has been initialized.")
 
-    def teardown(self):
+    async def teardown(self):
         if hasattr(self, "exporter"):
             self.logger.info("Shutting down Prometheus exporter.")
             self.exporter.shutdown()

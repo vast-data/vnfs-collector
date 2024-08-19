@@ -19,3 +19,9 @@ file:
 # prometheus:
 #  prometheus_host: <host>
 #  prometheus_port: <port>
+# kafka:
+#  bootstrap_servers: <broker1:9093,broker2:9093>
+#  topic: vnfs-collector
+#  sasl_username: <username>
+#  sasl_password: <password>
+#  security_protocol: SASL_PLAINTEXT

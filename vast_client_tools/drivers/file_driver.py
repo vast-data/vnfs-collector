@@ -1,10 +1,11 @@
+import json
 import logging
 import argparse
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
 from vast_client_tools.drivers.base import DriverBase
-
+from vast_client_tools.utils import iso_serializer
 
 class FileDriver(DriverBase):
     parser = argparse.ArgumentParser(add_help=False)
@@ -55,4 +56,4 @@ class FileDriver(DriverBase):
 
     async def store_sample(self, data):
         for _, entry in data.iterrows():
-            self.samples_logger.debug(str(entry.to_dict()))
+            self.samples_logger.debug(json.dumps(entry.to_dict(), default=iso_serializer))
