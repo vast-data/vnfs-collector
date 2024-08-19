@@ -7,6 +7,7 @@
 # uses in-kernel eBPF maps to store per process summaries for efficiency.
 
 import os
+import re
 import psutil
 import socket
 from threading import Thread
@@ -160,6 +161,19 @@ def filter_stats(data: pd.DataFrame, filter_tags: list, filter_condition: str):
         raise NotImplementedError(f"Filter condition {filter_condition} is not implemented.")
 
 
+class MountInfo:
+
+    def __init__(self, mountpoint, device):
+        self.mountpoint = mountpoint
+        self.device = device  # <ip>:/<path>
+
+    @property
+    def remote_path(self):
+        match = re.search(r".*:(/.*)$", self.device)
+        if match:
+            return match.group(1)
+        return ""
+
 
 class MountsMap:
     def __init__(self):
@@ -186,9 +200,8 @@ class MountsMap:
                 continue
             devt = self.devt_to_str(os.stat(p.mountpoint).st_dev)
             if devname == devt:
-                return p.mountpoint
+                return MountInfo(p.mountpoint, p.device)
         logger.warning("No mountpoint found for devt {}".format(devname))
-        return ""
 
     def get_mountpoint(self, st_dev):
         dev = self.devt_to_str(st_dev)
@@ -199,8 +212,6 @@ class MountsMap:
             if dev in self.map.keys():
                 return self.map[dev]
         logger.warning("No mountpoint found for devt {}".format(dev))
-        return ""
-
 
 class PidEnvMap:
     """
@@ -423,8 +434,14 @@ class StatsCollector:
                     "LISTXATTR_ERRORS": v.listxattr.errors,
                     "LISTXATTR_DURATION":nstosec(v.listxattr.duration),
                     "TAGS":         hashabledict(self.pid_env_map.get(k.tgid)),
-                    "MOUNT":        self.mounts_map.get_mountpoint(k.sbdev),
             }
+            mount_info = self.mounts_map.get_mountpoint(k.sbdev)
+            if mount_info:
+                output["MOUNT"] = mount_info.mountpoint
+                output["REMOTE_PATH"] = mount_info.remote_path
+            else:
+                output["MOUNT"] = output["REMOTE_PATH"] = ""
+
             statistics.append(output)
 
         if not self.batch_ops:

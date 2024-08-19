@@ -94,6 +94,7 @@ class PrometheusDriver(DriverBase, Collector):
                         "UID": str(entry.UID),
                         "COMM": entry.COMM,
                         "MOUNT": entry.MOUNT,
+                        "REMOTE_PATH": entry.REMOTE_PATH,
                     }
                     if self.common_args.envs:
                         for env in self.common_args.envs:

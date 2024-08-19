@@ -2,6 +2,7 @@
   {
     "PID": 1,
     "MOUNT": "/mnt",
+    "REMOTE_PATH": "/remote/mnt",
     "COMM": "ls",
     "OPEN_COUNT": 2,
     "OPEN_ERRORS": 0,
@@ -73,6 +74,7 @@
   {
     "PID": 1,
     "MOUNT": "/mnt",
+    "REMOTE_PATH": "/remote/mnt",
     "COMM": "ls",
     "OPEN_COUNT": 2,
     "OPEN_ERRORS": 0,
@@ -144,6 +146,7 @@
   {
     "PID": 2,
     "MOUNT": "/mnt",
+    "REMOTE_PATH": "/remote/mnt",
     "COMM": "bash",
     "OPEN_COUNT": 1,
     "OPEN_ERRORS": 0,
@@ -214,6 +217,7 @@
   {
     "PID": 2,
     "MOUNT": "/mnt",
+    "REMOTE_PATH": "/remote/mnt",
     "COMM": "ls",
     "OPEN_COUNT": 1,
     "OPEN_ERRORS": 0,

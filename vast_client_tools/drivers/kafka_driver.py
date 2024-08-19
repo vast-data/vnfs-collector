@@ -175,6 +175,7 @@ class KafkaDriver(DriverBase):
                 ("UID", str(entry.UID).encode()),
                 ("COMM", entry.COMM.encode()),
                 ("MOUNT", entry.MOUNT.encode()),
+                ("REMOTE_PATH", entry.REMOTE_PATH.encode()),
             ]
             key = f"{entry.HOSTNAME}:{entry.COMM}:{entry.UID}:{entry.PID}".encode()
             # Add environment variables to headers if provided

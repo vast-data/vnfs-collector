@@ -27,8 +27,9 @@ async def test_kafka_driver(data):
         assert headers[1][1].decode() == str(raw.UID)
         assert headers[2][1].decode() == raw.COMM
         assert headers[3][1].decode() == raw.MOUNT
+        assert headers[4][1].decode() == raw.REMOTE_PATH
         if "JOB" in raw.TAGS:
-            assert headers[4][0] == "JOB"
+            assert headers[5][0] == "JOB"
         assert (
             kwargs["key"].decode() == f"{raw.HOSTNAME}:{raw.COMM}:{raw.UID}:{raw.PID}"
         )
