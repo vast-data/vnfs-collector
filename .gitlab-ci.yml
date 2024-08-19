@@ -12,6 +12,8 @@ build_vnfs_collector:
   stage: build
   script: |
     set -x
+    python3 -m pip install .[test]
+    python3 -m pytest tests/
     LATEST=${DOCKER_REGISTRY}/dev/vnfs-collector:latest
     make docker_build
     docker tag vnfs-collector ${IMAGE_NAME}
