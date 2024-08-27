@@ -347,7 +347,7 @@ class StatsCollector:
         self.b.attach_kprobe(event="nfs_rename", fn_name="trace_nfs_rename")                     # updates rename count
         self.b.attach_kretprobe(event="nfs_rename", fn_name="trace_nfs_rename_ret")              # updates rename errors,duration
         self.b.attach_kprobe(event="nfs_do_access", fn_name="trace_nfs_do_access")               # updates access
-        self.b.attach_kprobe(event="nfs_do_access", fn_name="trace_nfs_do_access_ret")           # updates access errors,duration
+        self.b.attach_kretprobe(event="nfs_do_access", fn_name="trace_nfs_do_access_ret")        # updates access errors,duration
         # nfs4 attachments
         if BPF.get_kprobe_functions(b'nfs4_file_open'):
             self.b.attach_kprobe(event="nfs4_file_open", fn_name="trace_nfs_file_open")         # updates open count
