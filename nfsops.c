@@ -54,6 +54,8 @@ struct stats_t {
 	struct stat_t rename;
 	struct stat_t access;
 	struct stat_t listxattr;
+	struct stat_t mkdir;
+	struct stat_t rmdir;
 };
 
 BPF_HASH(counts, struct info_t, struct stats_t);
@@ -548,6 +550,44 @@ int trace_nfs_do_access_ret(struct pt_regs *ctx)
 	return 0;
 }
 
+int trace_nfs_mkdir(struct pt_regs *ctx, struct mnt_idmap *idmap,
+		struct inode *dir, struct dentry *dentry, umode_t mode)
+{
+	return trace_nfs_function_entry(ctx, dir, 0);
+}
+
+int trace_nfs_mkdir_ret(struct pt_regs *ctx)
+{
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
+		return 0;
+
+	statsp->mkdir.count++;
+	if (PT_REGS_RC(ctx))
+		statsp->mkdir.errors++;
+	statsp->mkdir.duration += bpf_ktime_get_ns() - start;
+	return 0;
+}
+
+int trace_nfs_rmdir(struct pt_regs *ctx, struct inode *dir, struct dentry *dentry)
+{
+	return trace_nfs_function_entry(ctx, dir, 0);
+}
+
+int trace_nfs_rmdir_ret(struct pt_regs *ctx)
+{
+	u64 start;
+	struct stats_t *statsp = get_stats(&start, NULL);
+	if (!statsp)
+		return 0;
+
+	statsp->rmdir.count++;
+	if (PT_REGS_RC(ctx))
+		statsp->rmdir.errors++;
+	statsp->rmdir.duration += bpf_ktime_get_ns() - start;
+	return 0;
+}
 
 int trace_nfs_listxattrs(struct pt_regs *ctx, struct dentry *dentry, char *list, size_t size)
 {
