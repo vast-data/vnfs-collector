@@ -67,4 +67,4 @@ async def test_collect_metrics(data):
         metrics = list(driver.collect())
         # Verify that metrics were collected
         assert len(metrics) > 0
-        assert mock_create_gauge.call_count == 236
+        assert mock_create_gauge.call_count == 260

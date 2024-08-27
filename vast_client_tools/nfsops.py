@@ -96,6 +96,12 @@ STATKEYS = {
         "ACCESS_COUNT":     "Number of NFS ACCESS calls",
         "ACCESS_ERRORS":    "Number of NFS ACCESS errors",
         "ACCESS_DURATION":  "Total NFS ACCESS duration (in seconds)",
+        "MKDIR_COUNT":     "Number of NFS MKDIR calls",
+        "MKDIR_ERRORS":    "Number of NFS MKDIR errors",
+        "MKDIR_DURATION":  "Total NFS MKDIR duration (in seconds)",
+        "RMDIR_COUNT":     "Number of NFS RMDIR calls",
+        "RMDIR_ERRORS":    "Number of NFS RMDIR errors",
+        "RMDIR_DURATION":  "Total NFS RMDIR duration (in seconds)",
         "LISTXATTR_COUNT":  "Number of NFS LISTXATTR calls",
         "LISTXATTR_ERRORS": "Number of NFS LISTXATTR errors",
         "LISTXATTR_DURATION": "Total NFS LISTXATTR duration (in seconds)",
@@ -348,6 +354,10 @@ class StatsCollector:
         self.b.attach_kretprobe(event="nfs_rename", fn_name="trace_nfs_rename_ret")              # updates rename errors,duration
         self.b.attach_kprobe(event="nfs_do_access", fn_name="trace_nfs_do_access")               # updates access
         self.b.attach_kretprobe(event="nfs_do_access", fn_name="trace_nfs_do_access_ret")        # updates access errors,duration
+        self.b.attach_kprobe(event="nfs_mkdir", fn_name="trace_nfs_mkdir")                       # updates mkdir count
+        self.b.attach_kretprobe(event="nfs_mkdir", fn_name="trace_nfs_mkdir_ret")                # updates mkdir errors,duration
+        self.b.attach_kprobe(event="nfs_rmdir", fn_name="trace_nfs_rmdir")                       # updates rmdir count
+        self.b.attach_kretprobe(event="nfs_rmdir", fn_name="trace_nfs_rmdir_ret")                # updates rmdir errors,duration
         # nfs4 attachments
         if BPF.get_kprobe_functions(b'nfs4_file_open'):
             self.b.attach_kprobe(event="nfs4_file_open", fn_name="trace_nfs_file_open")         # updates open count
@@ -430,6 +440,12 @@ class StatsCollector:
                     "ACCESS_COUNT":     v.access.count,
                     "ACCESS_ERRORS":    v.access.errors,
                     "ACCESS_DURATION":  nstosec(v.access.duration),
+                    "MKDIR_COUNT":     v.mkdir.count,
+                    "MKDIR_ERRORS":    v.mkdir.errors,
+                    "MKDIR_DURATION":  nstosec(v.mkdir.duration),
+                    "RMDIR_COUNT":     v.rmdir.count,
+                    "RMDIR_ERRORS":    v.rmdir.errors,
+                    "RMDIR_DURATION":  nstosec(v.rmdir.duration),
                     "LISTXATTR_COUNT":  v.listxattr.count,
                     "LISTXATTR_ERRORS": v.listxattr.errors,
                     "LISTXATTR_DURATION":nstosec(v.listxattr.duration),
