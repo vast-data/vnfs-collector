@@ -38,9 +38,9 @@ async def await_until_event_or_timeout(timeout: int, stop_event: asyncio.Event) 
     Returns:
         bool: True if the timeout completed before the event, False otherwise.
     """
-    sleep_task = asyncio.create_task(asyncio.sleep(timeout))
-    cancel_task = asyncio.create_task(stop_event.wait())
-
+    sleep_task = asyncio.ensure_future(asyncio.sleep(timeout))
+    cancel_task = asyncio.ensure_future(stop_event.wait())
+    # Wait for either the sleep_task or cancel_task to complete
     done, pending = await asyncio.wait({sleep_task, cancel_task}, return_when=asyncio.FIRST_COMPLETED)
 
     for task in pending:
