@@ -76,7 +76,7 @@ class PrometheusDriver(DriverBase, Collector):
 
     def _create_gauge(self, name, help_text, labels, value):
         gauge = GaugeMetricFamily(name, help_text, labels=labels.keys())
-        gauge.add_metric(labels.values(), value, time.time())
+        gauge.add_metric(labels.values(), value)
         return gauge
 
     def collect(self):
