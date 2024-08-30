@@ -8,6 +8,8 @@
 
 import os
 import re
+
+import numpy
 import psutil
 import socket
 from threading import Thread
@@ -165,6 +167,25 @@ def filter_stats(data: pd.DataFrame, filter_tags: list, filter_condition: str):
         return data[data["TAGS"].apply(lambda tags: all(filter_tag in tags for filter_tag in filter_tags))]
     else:
         raise NotImplementedError(f"Filter condition {filter_condition} is not implemented.")
+
+
+def anonymize_stats(data: pd.DataFrame, anon_fields: list):
+    """Anonymize fields in the DataFrame."""
+    def projection_fn(value):
+        if isinstance(value, str):
+            return "--"
+        elif isinstance(value, (int, float, numpy.integer, numpy.floating)):
+            return 0
+        elif isinstance(value, hashabledict):
+            return hashabledict({k: "--" for k in value.keys()})
+        else:
+            raise ValueError(f"Unsupported type {type(value)} for anonymization.")
+
+    # Create projection from first row.
+    projection = data[anon_fields].iloc[0].apply(projection_fn).values
+    # Apply projection to all anonymized columns.
+    data.loc[:, anon_fields] = projection
+    return data
 
 
 class MountInfo:
@@ -371,7 +392,7 @@ class StatsCollector:
             self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattr count
             self.b.attach_kretprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
 
-    def collect_stats(self, squash_pid=False, filter_tags=None, filter_condition=None):
+    def collect_stats(self, squash_pid=False, filter_tags=None, filter_condition=None, anon_fields=None):
         timestamp = pd.Timestamp.utcnow().astimezone(None).floor("s")
         logger.debug(f"######## collect sample ########")
 
@@ -480,4 +501,6 @@ class StatsCollector:
                 #   ls   {}        2811828           0            0            0.0            0 ...
                 #   ls   {}        2811867           0            0            0.0            0 ...
                 df = group_stats(df, ["MOUNT", "PID", "TAGS"])
+            if anon_fields:
+                df = anonymize_stats(df, anon_fields)
         return df

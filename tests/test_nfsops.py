@@ -1,6 +1,13 @@
+import pandas as pd
 import pytest
 from unittest.mock import patch
-from vast_client_tools.nfsops import group_stats, filter_stats, MountInfo, MountsMap
+from vast_client_tools.nfsops import (
+    group_stats,
+    filter_stats,
+    anonymize_stats,
+    MountInfo,
+    MountsMap,
+)
 
 import pandas.testing as pdt
 
@@ -120,3 +127,27 @@ def test_refresh_map(*_, **__):
     assert "dev1" in mounts_map.map
     assert isinstance(mounts_map.map["dev1"], MountInfo)
     assert mounts_map.map["dev1"].device == "172.17.0.2:/mnt/test"
+
+
+def test_anonymize_valid_fields(data):
+    data_copy = data.copy(deep=True)
+    anon_fields = ["MOUNT", "COMM", "TAGS"]
+    result = anonymize_stats(data_copy, anon_fields)
+    pdt.assert_series_equal(
+        result.MOUNT, pd.Series(["--", "--", "--", "--"], name="MOUNT")
+    )
+    pdt.assert_series_equal(
+        result.COMM, pd.Series(["--", "--", "--", "--"], name="COMM")
+    )
+    pdt.assert_series_equal(
+        result.TAGS,
+        pd.Series(
+            [
+                {"FOO": "--", "JOB": "--"},
+                {"FOO": "--", "JOB": "--"},
+                {"FOO": "--", "JOB": "--"},
+                {"FOO": "--", "JOB": "--"},
+            ],
+            name="TAGS",
+        ),
+    )

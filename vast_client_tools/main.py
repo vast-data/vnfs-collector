@@ -20,6 +20,8 @@ from vast_client_tools.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTr
 
 
 ENTRYPOINT_GROUP = "drivers"
+ANON_FIELDS = {"COMM", "MOUNT", "PID", "UID", "TAGS", "REMOTE_PATH"}
+
 entry_points = metadata.entry_points()
 if sys.version_info >= (3, 10):
     # Use the select method for Python 3.10+
@@ -98,7 +100,7 @@ conf_parser.add_argument(
     help="Pid env map vaccum interval, in seconds."
 )
 conf_parser.add_argument(
-    "-e", "--envs", type=lambda v: v.split(','),
+    "-e", "--envs", type=lambda v: list(map(str.strip, v.split(','))),
     help="Comma separated list of env vars."
 )
 conf_parser.add_argument(
@@ -114,6 +116,11 @@ conf_parser.add_argument(
     help="Specify how to filter statistics based on tags.\n"
          "- `all`: Requires all specified tag keys to match provided envs.\n"
          "- `any`: Requires at least one of the specified tag keys to match provided env.\n"
+)
+conf_parser.add_argument(
+    "--anon-fields", type=lambda v: list(map(str.strip, v.split(','))),
+    help="Comma separated list of fields to anonymize."
+         " Field values for such fields becomes '--' for string and 0 for integers/floats."
 )
 conf_parser.add_argument(
     "-C", "--cfg", default=None,
@@ -145,6 +152,11 @@ async def _exec():
     # Validate mutual dependencies
     if args.tag_filter and not args.envs:
         conf_parser.error("--tag-filter requires --envs to be specified.")
+
+    if args.anon_fields:
+        invalid_fields = set(args.anon_fields).difference(ANON_FIELDS)
+        if invalid_fields:
+            conf_parser.error(f"Invalid anonymized fields specified: {', '.join(invalid_fields)}")
 
     logger.info(f"BPF version: {__version__}")
     logger.info(
@@ -234,6 +246,7 @@ async def _exec():
             squash_pid=args.squash_pid,
             filter_tags=args.envs,
             filter_condition=args.tag_filter,
+            anon_fields=args.anon_fields,
         )
         if data.empty:
             continue
