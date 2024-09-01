@@ -19,7 +19,7 @@ class ScreenDriver(DriverBase):
 
     async def store_sample(self, data):
         if self.table_format:
-            output = data.T.to_string(index=False)
+            output = data.T.to_string(index=True, header=False)
         else:
             output = "\n".join(json.dumps(d.to_dict(), default=iso_serializer) for _, d in data.iterrows())
         self.logger.info(f">>>\n{output}")
