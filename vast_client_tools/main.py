@@ -1,5 +1,6 @@
 import os
 import sys
+import urllib3
 import logging
 import argparse
 import asyncio
@@ -18,6 +19,7 @@ from vast_client_tools.drivers import InvalidArgument
 from vast_client_tools.utils import set_signal_handler, await_until_event_or_timeout
 from vast_client_tools.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTracer, logger
 
+urllib3.disable_warnings()
 
 ENTRYPOINT_GROUP = "drivers"
 ANON_FIELDS = {"COMM", "MOUNT", "PID", "UID", "TAGS", "REMOTE_PATH"}
