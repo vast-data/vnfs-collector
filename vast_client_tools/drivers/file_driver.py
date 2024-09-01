@@ -21,7 +21,7 @@ class FileDriver(DriverBase):
         default=5
     )
     parser.add_argument(
-        '-max-size-mb',
+        '--max-size-mb',
         help=' Maximum size (in megabytes) per log file before rotation occurs.',
         type=int,
         default=200

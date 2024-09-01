@@ -35,10 +35,18 @@ class DriverBase(abc.ABC):
     async def setup(self, args=(), namespace=None):
         self.logger.info("Setting up driver.")
         if namespace:
+            if not isinstance(namespace, dict):
+                raise InvalidArgument(
+                    f"Invalid argument '{namespace}'."
+                    f" Check available arguments for {self.__class__.__name__} driver."
+                )
             namespace = argparse.Namespace(**namespace)
             # Create a new namespace with default values and update it from action defaults.
             for action in self.parser._actions:
                 dest = action.dest
+                dest_kebab_case = dest.replace("_", "-")
+                if hasattr(namespace, dest_kebab_case):
+                    setattr(namespace, dest, getattr(namespace, dest_kebab_case))
                 if not hasattr(namespace, dest):
                     if action.default is not argparse.SUPPRESS:
                         setattr(namespace, dest, action.default)
