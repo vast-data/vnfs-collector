@@ -118,9 +118,10 @@ class TestMainSuite:
 
         cli_factory(cmd=cmd)
         if expected_error:
-            with pytest.raises(Exception) as ctx:
+            with patch("vast_client_tools.main.logger.error") as m_logger:
                 await _exec()
             _, err = capfd.readouterr()
-            assert expected_error in err or expected_error in str(ctx.value)
+            error_log = m_logger.call_args[0][0]
+            assert expected_error in err or expected_error in error_log
         else:
             await _exec()
