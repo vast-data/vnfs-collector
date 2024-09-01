@@ -40,94 +40,23 @@ class VdbDriver(DriverBase):
             host=self.db_endpoint, access_key=db_access_key, secret_key=db_secret_key, secure=self.db_ssl_verify
         )
         if not self.vastapi.list_schemas(bucket=self.db_bucket, schema=self.db_schema):
-            self.vastapi.create_schema(self.db_bucket, self.db_schema)
-        if not self.vastapi.list_tables(
-                bucket=self.db_bucket, schema=self.db_schema, name_prefix=self.db_table, exact_match=True
-        ):
-            self.vastapi.create_table(
-                bucket=self.db_bucket, schema=self.db_schema, name=self.db_table, arrow_schema=self.get_columns()
-            )
+            raise ValueError(f"Schema {self.db_schema} does not exist.")
+
+        _, _, tables, *_ = self.vastapi.list_tables(
+            bucket=self.db_bucket, schema=self.db_schema, name_prefix=self.db_table, exact_match=True
+        )
+        if not tables:
+            raise ValueError(f"Table {self.db_table} does not exist.")
+
+        columns, *_ = self.vastapi.list_columns(bucket=self.db_bucket, schema=self.db_schema, table=self.db_table)
+        fields = [pa.field(name, dtype) for name, dtype, *_ in columns]
+        self.arrow_schema = pa.schema(fields)
         self.logger.info(f"{self} has been initialized.")
 
     async def store_sample(self, data):
-        record_batch = pa.RecordBatch.from_pandas(df=data, schema=self.get_columns())
+        df_copy = data.copy()
+        df_copy['TAGS'] = df_copy['TAGS'].apply(lambda d: list(d.items()))
+        record_batch = pa.RecordBatch.from_pandas(df=df_copy, schema=self.arrow_schema)
         self.vastapi.insert(
             bucket=self.db_bucket, schema=self.db_schema, table=self.db_table, record_batch=record_batch
         )
-
-    @classmethod
-    def get_columns(cls):
-        return pa.schema([
-            ('TIMESTAMP', pa.timestamp('s')),
-            ('HOSTNAME', pa.utf8()),
-            ('PID', pa.uint32()),
-            ('UID', pa.uint32()),
-            ('COMM', pa.utf8()),
-            ('OPEN_COUNT', pa.uint32()),
-            ('OPEN_ERRORS', pa.uint32()),
-            ('OPEN_DURATION', pa.float64()),
-            ('CLOSE_COUNT', pa.uint32()),
-            ('CLOSE_ERRORS', pa.uint32()),
-            ('CLOSE_DURATION', pa.float64()),
-            ('READ_COUNT', pa.uint32()),
-            ('READ_ERRORS', pa.uint32()),
-            ('READ_DURATION', pa.float64()),
-            ('READ_BYTES', pa.uint32()),
-            ('WRITE_COUNT', pa.uint32()),
-            ('WRITE_ERRORS', pa.uint32()),
-            ('WRITE_DURATION', pa.float64()),
-            ('WRITE_BYTES', pa.uint32()),
-            ('GETATTR_COUNT', pa.uint32()),
-            ('GETATTR_ERRORS', pa.uint32()),
-            ('GETATTR_DURATION', pa.float64()),
-            ('SETATTR_COUNT', pa.uint32()),
-            ('SETATTR_ERRORS', pa.uint32()),
-            ('SETATTR_DURATION', pa.float64()),
-            ('FLUSH_COUNT', pa.uint32()),
-            ('FLUSH_ERRORS', pa.uint32()),
-            ('FLUSH_DURATION', pa.float64()),
-            ('FSYNC_COUNT', pa.uint32()),
-            ('FSYNC_ERRORS', pa.uint32()),
-            ('FSYNC_DURATION', pa.float64()),
-            ('LOCK_COUNT', pa.uint32()),
-            ('LOCK_ERRORS', pa.uint32()),
-            ('LOCK_DURATION', pa.float64()),
-            ('MMAP_COUNT', pa.uint32()),
-            ('MMAP_ERRORS', pa.uint32()),
-            ('MMAP_DURATION', pa.float64()),
-            ('READDIR_COUNT', pa.uint32()),
-            ('READDIR_ERRORS', pa.uint32()),
-            ('READDIR_DURATION', pa.float64()),
-            ('CREATE_COUNT', pa.uint32()),
-            ('CREATE_ERRORS', pa.uint32()),
-            ('CREATE_DURATION', pa.float64()),
-            ('LINK_COUNT', pa.uint32()),
-            ('LINK_ERRORS', pa.uint32()),
-            ('LINK_DURATION', pa.float64()),
-            ('UNLINK_COUNT', pa.uint32()),
-            ('UNLINK_ERRORS', pa.uint32()),
-            ('UNLINK_DURATION', pa.float64()),
-            ('SYMLINK_COUNT', pa.uint32()),
-            ('SYMLINK_ERRORS', pa.uint32()),
-            ('SYMLINK_DURATION', pa.float64()),
-            ('LOOKUP_COUNT', pa.uint32()),
-            ('LOOKUP_ERRORS', pa.uint32()),
-            ('LOOKUP_DURATION', pa.float64()),
-            ('RENAME_COUNT', pa.uint32()),
-            ('RENAME_ERRORS', pa.uint32()),
-            ('RENAME_DURATION', pa.float64()),
-            ('ACCESS_COUNT', pa.uint32()),
-            ('ACCESS_ERRORS', pa.uint32()),
-            ('ACCESS_DURATION', pa.float64()),
-            ('MKDIR_COUNT', pa.uint32()),
-            ('MKDIR_ERRORS', pa.uint32()),
-            ('MKDIR_DURATION', pa.float64()),
-            ('RMDIR_COUNT', pa.uint32()),
-            ('RMDIR_ERRORS', pa.uint32()),
-            ('RMDIR_DURATION', pa.float64()),
-            ('LISTXATTR_COUNT', pa.uint32()),
-            ('LISTXATTR_ERRORS', pa.uint32()),
-            ('LISTXATTR_DURATION', pa.float64()),
-            ('TAGS', pa.map_(pa.string(), pa.string())),  # The TAGS column may be manipulated by the client.
-            ('MOUNT', pa.utf8())
-        ])
