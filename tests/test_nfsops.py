@@ -1,6 +1,6 @@
 import pandas as pd
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock, PropertyMock
 from vast_client_tools.nfsops import (
     group_stats,
     filter_stats,
@@ -113,20 +113,72 @@ def test_remote_path(addr, remote_path):
     assert mount_info.remote_path == remote_path
 
 
-@patch("pathlib.Path.exists", return_value=True)
-@patch("os.listdir", return_value=["dev1", "net", "dev2"])
-@patch(
-    "vast_client_tools.nfsops.MountsMap._findmount",
-    return_value=MountInfo("/mnt/test", "172.17.0.2:/mnt/test"),
-)
-def test_refresh_map(*_, **__):
+mountpoint_to_dev = {
+    '/mnt/test1': 123456,
+    '/mnt/test2': 654321
+}
+
+def fake_os_stat(mountpoint):
+    """Define fake_os_stat to return different st_dev values based on mountpoint"""
+    st_dev = mountpoint_to_dev.get(mountpoint, 0)  # Default to 0 if not found
+    return MagicMock(st_dev=st_dev)
+
+
+fake_disk_partitions = [
+    MagicMock(fstype='nfs', mountpoint='/mnt/test1', device='172.17.0.1:/mnt/test1'),
+    MagicMock(fstype='nfs', mountpoint='/mnt/test2', device='172.17.0.2:/mnt/test2'),
+]
+
+
+@patch('psutil.disk_partitions', MagicMock(return_value=fake_disk_partitions))
+@patch('os.stat', side_effect=lambda mountpoint: fake_os_stat(mountpoint))
+def test_refresh_map(mock_stat):
     mounts_map = MountsMap()
     mounts_map.refresh_map()
 
-    # Check that the map was populated correctly
-    assert "dev1" in mounts_map.map
-    assert isinstance(mounts_map.map["dev1"], MountInfo)
-    assert mounts_map.map["dev1"].device == "172.17.0.2:/mnt/test"
+    devt1 = mounts_map.devt_to_str(123456)
+    devt2 = mounts_map.devt_to_str(654321)
+
+    assert devt1 in mounts_map.map
+    assert devt2 in mounts_map.map
+
+    assert mounts_map.map[devt1].mountpoint == '/mnt/test1'
+    assert mounts_map.map[devt1].device == '172.17.0.1:/mnt/test1'
+
+    assert mounts_map.map[devt2].mountpoint == '/mnt/test2'
+    assert mounts_map.map[devt2].device == '172.17.0.2:/mnt/test2'
+
+
+@patch('psutil.disk_partitions', MagicMock(return_value=fake_disk_partitions))
+@patch('os.stat', side_effect=lambda mountpoint: fake_os_stat(mountpoint))
+def test_get_mountpoint(mock_stat):
+
+    mounts_map = MountsMap()
+    devt1 = mounts_map.devt_to_str(123456)
+    devt2 = mounts_map.devt_to_str(654321)
+
+    mount_info1 = mounts_map.get_mountpoint(123456)
+    mount_info2 = mounts_map.get_mountpoint(654321)
+
+    assert isinstance(mount_info1, MountInfo)
+    assert mount_info1.mountpoint == '/mnt/test1'
+    assert mount_info1.device == '172.17.0.1:/mnt/test1'
+
+    assert isinstance(mount_info2, MountInfo)
+    assert mount_info2.mountpoint == '/mnt/test2'
+    assert mount_info2.device == '172.17.0.2:/mnt/test2'
+
+
+@patch('psutil.disk_partitions')
+@patch('os.stat', side_effect=lambda mountpoint: fake_os_stat(mountpoint))
+def test_get_mountpoint_with_missing_device(mock_stat, mock_disk_partitions):
+    mock_disk_partitions.return_value = []
+
+    mounts_map = MountsMap()
+    devt = mounts_map.devt_to_str(123456)
+    mount_info = mounts_map.get_mountpoint(123456)
+
+    assert mount_info is None
 
 
 def test_anonymize_valid_fields(data):
