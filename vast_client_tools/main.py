@@ -256,8 +256,7 @@ async def _exec():
 
     await asyncio.gather(*mgr.map_method("teardown"))
     if exit_error:
-        logger.error("Setup failed")
-        raise exit_error
+        logger.error(str(exit_error))
 
 def main():
     loop = asyncio.get_event_loop()
