@@ -2,13 +2,13 @@
 # - JOBID
 # - SCHEDID
 # - POD_NAME
-interval: 5
+interval: 60
 vaccum: 600
-screen: {}
+# screen: {}
 file:
-  samples_path: /opt/vnfs-collector/vnfs-collector.log
-  max_backups: 5
-  max_size_mb: 200
+ samples_path: /opt/vnfs-collector/vnfs-collector.log
+ max_backups: 5
+ max_size_mb: 200
 # vdb:
 #  db_endpoint: <endpoint>
 #  db_access_key: <access_key>
