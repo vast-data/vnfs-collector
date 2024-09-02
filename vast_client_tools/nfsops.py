@@ -209,26 +209,16 @@ class MountsMap:
 
     def refresh_map(self):
         mountmap = {}
-        if not Path("/sys/fs/nfs").exists():
-            return
-        for f in os.listdir("/sys/fs/nfs"):
-            if f == "net":
+        for p in psutil.disk_partitions(all=True):
+            if 'nfs' not in p.fstype:
                 continue
-            mountmap[f] = self._findmount(f)
+            devt = self.devt_to_str(os.stat(p.mountpoint).st_dev)
+            mountmap[devt] = MountInfo(p.mountpoint, p.device)
         self.map = mountmap
 
     def devt_to_str(self, st_dev):
         MINORBITS = 20
         return "{}:{}".format(st_dev >> MINORBITS, st_dev & 2**MINORBITS-1)
-
-    def _findmount(self, devname):
-        for p in psutil.disk_partitions(all=True):
-            if 'nfs' not in p.fstype:
-                continue
-            devt = self.devt_to_str(os.stat(p.mountpoint).st_dev)
-            if devname == devt:
-                return MountInfo(p.mountpoint, p.device)
-        logger.warning("No mountpoint found for devt {}".format(devname))
 
     def get_mountpoint(self, st_dev):
         dev = self.devt_to_str(st_dev)
