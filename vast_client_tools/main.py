@@ -21,6 +21,7 @@ from vast_client_tools.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTr
 
 urllib3.disable_warnings()
 
+BASE_PATH = Path(__file__).parents[1]
 ENTRYPOINT_GROUP = "drivers"
 ANON_FIELDS = {"COMM", "MOUNT", "PID", "UID", "TAGS", "REMOTE_PATH"}
 
@@ -161,7 +162,9 @@ async def _exec():
             conf_parser.error(f"Invalid anonymized fields specified: {', '.join(invalid_fields)}")
 
     logger.info(f"BPF version: {__version__}")
+    collector_version = BASE_PATH.joinpath("version.txt").read_text()
     logger.info(
+        f"VNSF Collector<{COLORS.blue(collector_version)}> initialization\n"
         f"Configuration options: "
         f"drivers={drivers}, "
         f"interval={args.interval}, "
@@ -169,10 +172,12 @@ async def _exec():
         f"envs={args.envs}, "
         f"ebpf={args.ebpf}, "
         f"squash-pid={args.squash_pid}, "
+        f"tag-filter={args.tag_filter}, "
+        f"anon-fields={args.anon_fields}, "
         f"config={args.cfg}"
     )
     # read BPF program text
-    with Path(__file__).parents[1].joinpath("nfsops.c").open() as f:
+    with BASE_PATH.joinpath("nfsops.c").open() as f:
         bpf_text = f.read()
     debug = args.debug
     if debug:
