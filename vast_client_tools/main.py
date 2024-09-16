@@ -15,8 +15,13 @@ from bcc import BPF, __version__
 from stevedore.named import NamedExtensionManager, ExtensionManager
 
 from vast_client_tools.logger import COLORS
-from vast_client_tools.drivers import InvalidArgument
-from vast_client_tools.utils import set_signal_handler, await_until_event_or_timeout
+from vast_client_tools.utils import (
+    InvalidArgument,
+    set_signal_handler,
+    await_until_event_or_timeout,
+    parse_args_options_from_namespace,
+    maybe_list_parse,
+)
 from vast_client_tools.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTracer, logger
 
 urllib3.disable_warnings()
@@ -88,22 +93,22 @@ conf_parser.add_argument(
     '-d', '--driver',
     help="Driver to enable. "
          f"User can specify multiple options.",
-    choices=available_drivers, action='append', required=False,
+    choices=available_drivers, action='append', required=False, default=None
 )
 conf_parser.add_argument(
     "--debug", action="store_true",
     help="Enable debug prints."
 )
 conf_parser.add_argument(
-    "-i", "--interval", default=5,
+    "-i", "--interval", default=5, type=int,
     help="Output interval, in seconds."
 )
 conf_parser.add_argument(
-    "-v", "--vaccum", default=600,
+    "-v", "--vaccum", default=600, type=int,
     help="Pid env map vaccum interval, in seconds."
 )
 conf_parser.add_argument(
-    "-e", "--envs", type=lambda v: list(map(str.strip, v.split(','))),
+    "-e", "--envs", type=maybe_list_parse,
     help="Comma separated list of env vars."
 )
 conf_parser.add_argument(
@@ -121,7 +126,7 @@ conf_parser.add_argument(
          "- `any`: Requires at least one of the specified tag keys to match provided env.\n"
 )
 conf_parser.add_argument(
-    "--anon-fields", type=lambda v: list(map(str.strip, v.split(','))),
+    "--anon-fields", type=maybe_list_parse,
     help="Comma separated list of fields to anonymize."
          " Field values for such fields becomes '--' for string and 0 for integers/floats."
 )
@@ -145,9 +150,8 @@ async def _exec():
         with open(args.cfg) as f:
             cfg_opts = yaml.safe_load(f)
             if cfg_opts:
-                args, _ = conf_parser.parse_known_args(namespace=argparse.Namespace(**cfg_opts))
+                args = parse_args_options_from_namespace(namespace=cfg_opts, parser=conf_parser)
                 args.driver = sorted(set(available_drivers).intersection(set(cfg_opts.keys())))
-
     drivers = args.driver
     if not drivers:
         conf_parser.error("No driver specified.")
