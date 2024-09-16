@@ -163,8 +163,8 @@ async def _exec():
 
     logger.info(f"BPF version: {__version__}")
     collector_version = BASE_PATH.joinpath("version.txt").read_text()
+    logger.info(f"VNFS Collector<{COLORS.intense_blue(collector_version)}> initialization")
     logger.info(
-        f"VNSF Collector<{COLORS.blue(collector_version)}> initialization\n"
         f"Configuration options: "
         f"drivers={drivers}, "
         f"interval={args.interval}, "
