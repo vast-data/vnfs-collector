@@ -3,13 +3,13 @@ import json
 import asyncio
 import argparse
 import os
-from vast_client_tools.utils import unix_serializer
+from vast_client_tools.utils import unix_serializer, maybe_list_parse
 from vast_client_tools.drivers.base import DriverBase, InvalidArgument
 
 
 class KafkaDriver(DriverBase):
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--bootstrap-servers', type=str, required=True,
+    parser.add_argument('--bootstrap-servers', type=maybe_list_parse, required=True,
                         help='Comma-separated list of Kafka broker addresses (e.g., "broker1:9092,broker2:9092").')
     parser.add_argument('--topic', type=str, required=True,
                         help='Kafka topic where the message will be published.')
@@ -69,7 +69,7 @@ class KafkaDriver(DriverBase):
         from aiokafka import AIOKafkaProducer
 
         args = await super().setup(args, namespace)
-        self.bootstrap_servers = [server.strip() for server in args.bootstrap_servers.split(',')]
+        self.bootstrap_servers = args.bootstrap_servers
         self.topic = args.topic
         self.max_request_size = args.max_request_size
         self.client_id = args.client_id
