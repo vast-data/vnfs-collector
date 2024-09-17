@@ -232,7 +232,12 @@ int trace_nfs_file_open_ret(struct pt_regs *ctx)
 	return 0;
 }
 
-int trace_nfs_getattr(struct pt_regs *ctx, struct mnt_idmap *idmap,
+int trace_nfs_getattr(struct pt_regs *ctx,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+struct mnt_idmap *idmap,
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5,12,0)
+struct user_namespace *mnt_userns,
+#endif
 		const struct path *path, struct kstat *stat, u32 request_mask,
 		unsigned int query_flags)
 {
@@ -253,7 +258,12 @@ int trace_nfs_getattr_ret(struct pt_regs *ctx)
 	return 0;
 }
 
-int trace_nfs_setattr(struct pt_regs *ctx, struct mnt_idmap *idmap,
+int trace_nfs_setattr(struct pt_regs *ctx,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+struct mnt_idmap *idmap,
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5,12,0)
+struct user_namespace *mnt_userns,
+#endif
 		struct dentry *dentry, struct iattr *attr)
 {
 	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
@@ -411,10 +421,15 @@ int trace_nfs_readdir_ret(struct pt_regs *ctx)
 	return 0;
 }
 
-int trace_nfs_create(struct pt_regs *ctx, struct mnt_idmap *idmap,
+int trace_nfs_create(struct pt_regs *ctx,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+struct mnt_idmap *idmap,
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5,12,0)
+struct user_namespace *mnt_userns,
+#endif
 		struct inode *dir, struct dentry *dentry, umode_t mode, bool excl)
 {
-	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
+	return trace_nfs_function_entry(ctx, dir, 0);
 }
 
 int trace_nfs_create_ret(struct pt_regs *ctx)
@@ -434,7 +449,7 @@ int trace_nfs_create_ret(struct pt_regs *ctx)
 int trace_nfs_link(struct pt_regs *ctx, struct dentry *old_dentry,
 		struct inode *dir, struct dentry *dentry)
 {
-	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
+	return trace_nfs_function_entry(ctx, dir, 0);
 }
 
 int trace_nfs_link_ret(struct pt_regs *ctx)
@@ -453,7 +468,7 @@ int trace_nfs_link_ret(struct pt_regs *ctx)
 
 int trace_nfs_unlink(struct pt_regs *ctx, struct inode *dir, struct dentry *dentry)
 {
-	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
+	return trace_nfs_function_entry(ctx, dir, 0);
 }
 
 int trace_nfs_unlink_ret(struct pt_regs *ctx)
@@ -470,10 +485,15 @@ int trace_nfs_unlink_ret(struct pt_regs *ctx)
 	return 0;
 }
 
-int trace_nfs_symlink(struct pt_regs *ctx, struct mnt_idmap *idmap,
+int trace_nfs_symlink(struct pt_regs *ctx,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+struct mnt_idmap *idmap,
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5,12,0)
+struct user_namespace *mnt_userns,
+#endif
 		struct inode *dir, struct dentry *dentry, const char *symname)
 {
-	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
+	return trace_nfs_function_entry(ctx, dir, 0);
 }
 
 int trace_nfs_symlink_ret(struct pt_regs *ctx)
@@ -493,7 +513,7 @@ int trace_nfs_symlink_ret(struct pt_regs *ctx)
 int trace_nfs_lookup(struct pt_regs *ctx, struct inode *dir,
 		struct dentry * dentry, unsigned int flags)
 {
-	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
+	return trace_nfs_function_entry(ctx, dir, 0);
 }
 
 int trace_nfs_lookup_ret(struct pt_regs *ctx)
@@ -510,11 +530,16 @@ int trace_nfs_lookup_ret(struct pt_regs *ctx)
 	return 0;
 }
 
-int trace_nfs_rename(struct pt_regs *ctx,  struct mnt_idmap *idmap, struct inode *old_dir,
-			   struct dentry *old_dentry, struct inode *new_dir,
-			   struct dentry *new_dentry, unsigned int flags)
+int trace_nfs_rename(struct pt_regs *ctx,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+struct mnt_idmap *idmap,
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5,12,0)
+struct user_namespace *mnt_userns,
+#endif
+		struct inode *old_dir, struct dentry *old_dentry,
+		struct inode *new_dir, struct dentry *new_dentry, unsigned int flags)
 {
-	return trace_nfs_function_entry(ctx, new_dentry->d_inode, 0);
+	return trace_nfs_function_entry(ctx, old_dir, 0);
 }
 
 int trace_nfs_rename_ret(struct pt_regs *ctx)
@@ -550,7 +575,12 @@ int trace_nfs_do_access_ret(struct pt_regs *ctx)
 	return 0;
 }
 
-int trace_nfs_mkdir(struct pt_regs *ctx, struct mnt_idmap *idmap,
+int trace_nfs_mkdir(struct pt_regs *ctx,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+struct mnt_idmap *idmap,
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5,12,0)
+struct user_namespace *mnt_userns,
+#endif
 		struct inode *dir, struct dentry *dentry, umode_t mode)
 {
 	return trace_nfs_function_entry(ctx, dir, 0);
