@@ -2,17 +2,7 @@ import abc
 import argparse
 
 from vast_client_tools.logger import get_logger, COLORS
-
-
-class InvalidArgument(Exception):
-    pass
-
-
-def get_val_or_raise(args, key):
-    val = getattr(args, key)
-    if val is None:
-        raise InvalidArgument(f"the following arguments are required: --{key}")
-    return val
+from vast_client_tools.utils import InvalidArgument, parse_args_options_from_namespace
 
 
 class DriverBase(abc.ABC):
@@ -40,38 +30,7 @@ class DriverBase(abc.ABC):
                     f"Invalid argument '{namespace}'."
                     f" Check available arguments for {self.__class__.__name__} driver."
                 )
-            namespace = argparse.Namespace(**namespace)
-            # Create a new namespace with default values and update it from action defaults.
-            for action in self.parser._actions:
-                dest = action.dest
-                dest_kebab_case = dest.replace("_", "-")
-                if hasattr(namespace, dest_kebab_case):
-                    setattr(namespace, dest, getattr(namespace, dest_kebab_case))
-                if not hasattr(namespace, dest):
-                    if action.default is not argparse.SUPPRESS:
-                        setattr(namespace, dest, action.default)
-                    if action.required:
-                        get_val_or_raise(namespace, dest)
-                # Validate choices if available
-                if action.choices:
-                    value = getattr(namespace, dest, argparse.SUPPRESS)
-                    if value != argparse.SUPPRESS and value not in action.choices:
-                        raise InvalidArgument(
-                            f"invalid choice '{value}' for argument '--{dest}'. Must be one of {action.choices}."
-                        )
-                # Validate integer types
-                if action.type == int:
-                    value = getattr(namespace, dest, argparse.SUPPRESS)
-                    if value != argparse.SUPPRESS:
-                        try:
-                            # Ensure value can be converted to int and fits the integer type
-                            int_value = int(value)
-                            setattr(namespace, dest, int_value)
-                        except ValueError:
-                            raise InvalidArgument(
-                                f"invalid int value '{value}' for argument '--{dest}'."
-                            )
-            return namespace
+            return parse_args_options_from_namespace(namespace=namespace, parser=self.parser)
         try:
             args, _ = self.parser.parse_known_args(args)
             return args
