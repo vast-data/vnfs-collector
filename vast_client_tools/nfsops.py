@@ -181,10 +181,10 @@ def anonymize_stats(data: pd.DataFrame, anon_fields: list):
         else:
             raise ValueError(f"Unsupported type {type(value)} for anonymization.")
 
-    # Create projection from first row.
-    projection = data[anon_fields].iloc[0].apply(projection_fn).values
-    # Apply projection to all anonymized columns.
-    data.loc[:, anon_fields] = projection
+    # Apply projection_fn directly to the specified columns
+    for field in anon_fields:
+        data[field] = data[field].apply(projection_fn)
+
     return data
 
 
