@@ -85,7 +85,7 @@ class PrometheusDriver(DriverBase, Collector):
             samples_count = len(self.local_buffer)
             if samples_count == 0:
                 return
-            self.logger.info(f"Found {samples_count} sample(s).")
+            self.logger.debug(f"Found {samples_count} sample(s).")
             while self.local_buffer:
                 data = self.local_buffer.popleft()
                 for _, entry in data.iterrows():
