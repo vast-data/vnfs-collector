@@ -196,8 +196,8 @@ def test_anonymize_valid_fields(data):
         pd.Series(
             [
                 {"FOO": "--", "JOB": "--"},
-                {"FOO": "--", "JOB": "--"},
-                {"FOO": "--", "JOB": "--"},
+                {"FOO": "--", "TAR": "--"},
+                {"FOO": "--"},
                 {"FOO": "--", "JOB": "--"},
             ],
             name="TAGS",
