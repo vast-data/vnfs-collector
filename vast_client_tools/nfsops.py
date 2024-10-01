@@ -209,14 +209,15 @@ class MountsMap:
         self.map = {}
         self.refresh_map()
 
-    def refresh_map_from_mountinfo(self):
+    def refresh_map_mountinfo(self):
         mountmap = {}
         mounts = open(PROCFS_MOUNTINFO_PATH).readlines()
         for mount in mounts:
             parts = mount.split()
             devt = parts[2]
             mountpoint = parts[4]
-            fstype, device, *_ = mount[mount.index("-") + 1:].strip().split(" ", 2)
+            fstype = parts[parts.index("-") + 1]
+            device = parts[parts.index("-") + 2]
             if 'nfs' not in fstype:
                 continue
             mountmap[devt] = MountInfo(mountpoint, device)
@@ -240,10 +241,10 @@ class MountsMap:
         try:
             return self.map[dev]
         except KeyError:
-            self.refresh_map()
+            self.refresh_map_mountinfo()
             if dev in self.map.keys():
                 return self.map[dev]
-            self.refresh_map_from_mountinfo()
+            self.refresh_map()
             if dev in self.map.keys():
                 return self.map[dev]
         logger.warning("No mountpoint found for devt {}".format(dev))

@@ -173,9 +173,9 @@ def test_get_mountpoint(mock_stat):
 
 @patch.object(nfsops, "PROCFS_MOUNTINFO_PATH", ROOT / "data" / "mounts")
 @patch.object(MountsMap, "refresh_map", MagicMock())
-def test_refresh_map_from_mountinfo():
+def test_refresh_map_mountinfo():
     mounts_map = MountsMap()
-    mounts_map.refresh_map_from_mountinfo()
+    mounts_map.refresh_map_mountinfo()
     map = mounts_map.map
     assert len(map) == 2
     assert "0:321" in map
