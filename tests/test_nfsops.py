@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
+import vast_client_tools.nfsops as nfsops
 from vast_client_tools.nfsops import (
     group_stats,
     filter_stats,
@@ -8,6 +9,7 @@ from vast_client_tools.nfsops import (
     MountInfo,
     MountsMap,
 )
+from tests.conftest import ROOT
 
 import pandas.testing as pdt
 
@@ -167,6 +169,21 @@ def test_get_mountpoint(mock_stat):
     assert isinstance(mount_info2, MountInfo)
     assert mount_info2.mountpoint == '/mnt/test2'
     assert mount_info2.device == '172.17.0.2:/mnt/test2'
+
+
+@patch.object(nfsops, "PROCFS_MOUNTINFO_PATH", ROOT / "data" / "mounts")
+@patch.object(MountsMap, "refresh_map", MagicMock())
+def test_refresh_map_mountinfo():
+    mounts_map = MountsMap()
+    mounts_map.refresh_map_mountinfo()
+    map = mounts_map.map
+    assert len(map) == 2
+    assert "0:321" in map
+    assert "0:69" in map
+    assert map["0:321"].mountpoint == "/mnt/test"
+    assert map["0:69"].mountpoint == "/mnt/test2"
+    assert map["0:321"].device == "172.17.0.3:/"
+    assert map["0:69"].device == "172.17.0.2:/"
 
 
 @patch('psutil.disk_partitions')

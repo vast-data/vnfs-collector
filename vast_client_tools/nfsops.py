@@ -23,6 +23,8 @@ from vast_client_tools.logger import get_logger, COLORS
 logger = get_logger("nfsops", COLORS.magenta)
 
 
+PROCFS_MOUNTINFO_PATH = "/proc/self/mountinfo"
+
 class hashabledict(dict):
     def __hash__(self):
         return hash(tuple(sorted(self.items())))
@@ -207,6 +209,20 @@ class MountsMap:
         self.map = {}
         self.refresh_map()
 
+    def refresh_map_mountinfo(self):
+        mountmap = {}
+        mounts = open(PROCFS_MOUNTINFO_PATH).readlines()
+        for mount in mounts:
+            parts = mount.split()
+            devt = parts[2]
+            mountpoint = parts[4]
+            fstype = parts[parts.index("-") + 1]
+            device = parts[parts.index("-") + 2]
+            if 'nfs' not in fstype:
+                continue
+            mountmap[devt] = MountInfo(mountpoint, device)
+        self.map = mountmap
+
     def refresh_map(self):
         mountmap = {}
         for p in psutil.disk_partitions(all=True):
@@ -225,6 +241,9 @@ class MountsMap:
         try:
             return self.map[dev]
         except KeyError:
+            self.refresh_map_mountinfo()
+            if dev in self.map.keys():
+                return self.map[dev]
             self.refresh_map()
             if dev in self.map.keys():
                 return self.map[dev]
