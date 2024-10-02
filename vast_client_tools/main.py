@@ -232,8 +232,8 @@ async def _exec():
             envTracer.start()
 
         # probe needed modules (nfsv4 autoloads nfs)
-        os.system(f"/usr/sbin/modprobe kheaders  > {os.devnull} 2>&1")
-        os.system(f"/usr/sbin/modprobe nfsv4 > {os.devnull} 2>&1")
+        os.system(f"modprobe kheaders  > {os.devnull} 2>&1")
+        os.system(f"modprobe nfsv4 > {os.devnull} 2>&1")
 
         while True:
             try:
