@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vnfs-collector
+spec:
+  selector:
+    matchLabels:
+      app: vnfs-collector
+  template:
+    metadata:
+      labels:
+        app: vnfs-collector
+    spec:
+      hostPID: true
+      hostIPC: true
+      containers:
+        - name: vnfs-collector
+          image: fnn45/vnfs-collector
+          command: ["vnfs-collector", "-C", "/opt/nfsops/nfsops.yaml"]
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+          volumeMounts:
+            - mountPath: /lib/modules
+              name: lib-modules
+              readOnly: true
+            - mountPath: /usr/src
+              name: usr-src
+              readOnly: true
+            - mountPath: /sys/fs
+              name: sys-fs
+              readOnly: true
+            - mountPath: /sys/kernel
+              name: sys-kernel
+              readOnly: true
+            - mountPath: /proc
+              name: proc-volume
+              readOnly: true
+            - mountPath: /host
+              name: host
+              mountPropagation: Bidirectional
+            - mountPath: /opt/nfsops
+              name: vnfs-config
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+      volumes:
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
+        - name: usr-src
+          hostPath:
+            path: /usr/src
+        - name: sys-fs
+          hostPath:
+            path: /sys/fs
+        - name: sys-kernel
+          hostPath:
+            path: /sys/kernel
+            type: Directory
+        - name: proc-volume
+          hostPath:
+            path: /proc
+            type: Directory
+        - name: host
+          hostPath:
+            path: /
+            type: Directory
+        - name: vnfs-config
+          configMap:
+            name: vnfs-config
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vnfs-config
+data:
+  nfsops.yaml: |  # This key defines the file name
+    interval: "60"
+    file:
+      samples_path: /opt/vnfs-collector/vnfs-collector.log
+      max_backups: 5
+      max_size_mb: 200
+    prometheus:
+      prometheus_host: "localhost"
+      prometheus_port: "9090"

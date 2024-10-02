@@ -178,10 +178,10 @@ docker run \
   --volume $(pwd):/opt/nfsops \
   --volume /lib/modules:/lib/modules:ro \
   --volume /usr/src:/usr/src:ro \
-  --volume /usr/sbin:/usr/sbin:ro \
   --volume /sys/fs:/sys/fs:ro \
   --volume /sys/kernel:/sys/kernel:ro \
   --volume /proc:/proc:rw \
+  --volume /host:/:ro \
   --name vnfs-collector \
   -t vnfs-collector \
   -C nfsops.yaml
@@ -189,34 +189,46 @@ docker run \
 
 Make sure you specified correct volume bindings:
 
-| Mount                              | Description                                                                                                                                                                                                                                                                            | Required |
-|------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| `$(pwd):/opt/nfsops`               | Binds the host working directory to the working directory of `vnfs-collector` within the Docker container. This is optional and is used if you want to pass full configuration from the host. CLI arguments can also be provided separately (e.g., `-envs "JOBID,MYENV" -interval 5`). | No       |
-| `/lib/modules:/lib/modules:ro`    | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
-| `/usr/src:/usr/src:ro`             | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
-| `/usr/sbin:/usr/sbin:ro`           | Required for `modprobe` execution.                                                                                                                                                                                                                                                     | Yes      |
-| `/sys/fs:/sys/fs:ro`               | Required for tracking active mounts.                                                                                                                                                                                                                                                   | Yes      |
-| `/sys/kernel:/sys/kernel:ro`       | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
-| `/proc:/proc:rw`                   | Required only if the `--envs` CLI flag is provided. This binding allows `vnfs-collector` to access environment variables per process.                                                                                                                                                  | No       |
-                                                                                                                         
+| Mount                          | Description                                                                                                                                                                                                                                                                            | Required |
+|--------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| `$(pwd):/opt/nfsops`           | Binds the host working directory to the working directory of `vnfs-collector` within the Docker container. This is optional and is used if you want to pass full configuration from the host. CLI arguments can also be provided separately (e.g., `-envs "JOBID,MYENV" -interval 5`). | No       |
+| `/lib/modules:/lib/modules:ro` | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
+| `/usr/src:/usr/src:ro`         | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
+| `/sys/fs:/sys/fs:ro`           | Required for tracking active mounts.                                                                                                                                                                                                                                                   | Yes      |
+| `/sys/kernel:/sys/kernel:ro`   | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
+| `/proc:/proc:rw`               | Required only if the `--envs` CLI flag is provided. This binding allows `vnfs-collector` to access environment variables per process.                                                                                                                                                  | No       |
+| `/host:/:ro`                   | Required for sys calls execution from host                                                                                                                                                                                                                                             | Yes      |
 
-
-##### Start rocky based container:
-```bash
-docker build --build-arg="VERSION=$(cat version.txt)" -f docker/rocky.Dockerfile -t vnfs-collector .
-docker run \
-  --privileged \
-  --volume $(pwd):/opt/nfsops \
-  --volume /lib/modules:/lib/modules:ro \
-  --volume /usr/src:/usr/src:ro \
-  --volume /usr/sbin:/usr/sbin:ro \
-  --volume /sys/fs:/sys/fs:ro \
-  --volume /sys/kernel:/sys/kernel:ro \
-  --volume /proc:/proc:rw \
-  --name vnfs-collector \
-  -t vnfs-collector \
-  -C nfsops.yaml
-```
 
 If you want docker container to start at system boot, use `--restart always`
 or `--restart unless-stopped` option to `docker run` command.
+
+
+### VNFS Collector DaemonSet
+The VNFS Collector DaemonSet deploys a BPF application on all nodes in a Kubernetes cluster.
+It collects networking and performance metrics from the host system.
+
+Key Features
+- Runs with host PID and IPC for deep integration with the host.
+- Privileged mode with elevated permissions.
+- Access to critical system directories mounted as read-only.
+- Automatically uses the hostname of the node for context.
+-
+Usage
+To deploy, apply the YAML configuration:
+
+```bash
+kubectl apply -f k8s/daemonset.yaml
+```
+
+Check the status with:
+
+```bash
+kubectl get ds vnfs-collector
+```
+
+To view the logs, use:
+
+```bash
+kubectl logs ds/vnfs-collector -f
+```
