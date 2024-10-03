@@ -1,5 +1,6 @@
 stages:
   - build
+  - deploy
 
 image: ${AWS_ACCOUNT_ID}.dkr.ecr.eu-west-1.amazonaws.com/dev/vnfs-collector:CI-2024-08-15
 
@@ -21,5 +22,23 @@ build_vnfs_collector:
     docker push ${IMAGE_NAME}
     docker push ${LATEST}
     echo "pushed ${IMAGE_NAME}"
+  tags:
+    - vast-dev-builder
+
+
+update_dockerhub:
+  stage: deploy
+  script: |
+    set -x
+    VERSION=$(cat version.txt)
+    echo "$DOCKERHUB_PW" | docker login --username "$DOCKERHUB_USER" --password-stdin
+    export IMAGE_NAME=docker.io/vastdataorg/vnfs-collector:${VERSION}
+    docker buildx create --name builder --use
+    docker buildx build -f docker/debian.Dockerfile \
+      --build-arg=VERSION="$VERSION" \
+      --platform "linux/amd64,linux/arm64" \
+      -t ${IMAGE_NAME} \
+      --push .
+  when: manual
   tags:
     - vast-dev-builder
