@@ -160,11 +160,6 @@ screen: {}
 This key means that driver is enabled and uses default options.
 
 ### Docker Usage
-<div style="border: 1px solid #002aff; background-color: #dde9ff; padding: 10px; margin: 10px 0;">
-  <strong>Note:</strong> 
-Usage with docker is experimental and not yet fully tested.
-</div>
-
 The utility can be run in a Docker container using the provided Dockerfile.
 This can be useful for testing and deployment in containerized environments.
 ##### Prerequisites:
@@ -231,4 +226,65 @@ To view the logs, use:
 
 ```bash
 kubectl logs ds/vnfs-collector -f
+```
+
+<div style="border: 1px solid #002aff; background-color: #dde9ff; padding: 10px; margin: 10px 0;">
+  <strong>Note:</strong> 
+Adjust the configuration, which can be found in the 
+ConfigMap located in the k8s/daemonset.yaml file, to suit your environment.
+</div>
+
+
+To get information about all available options use:
+```bash
+kubectl exec -it ds/vnfs-collector -- vnfs-collector --help
+```
+
+##### Access prometheus exported metrics:
+
+To expose the metrics to Prometheus, you need to create a service.
+The type of service you choose will depend on whether your Prometheus instance is running within the same cluster.
+If Prometheus is in the same cluster, you can use a ClusterIP service type:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: vnfs-collector-service
+spec:
+  selector:
+    app: vnfs-collector
+  ports:
+    - protocol: TCP
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP
+```
+
+To check. Being within cluster
+```bash
+curl http://vnfs-collector-service:9090/metrics
+```
+
+If Prometheus is running outside the cluster, you should use a NodePort service type:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: vnfs-collector-service
+spec:
+  selector:
+    app: vnfs-collector
+  ports:
+    - protocol: TCP
+      port: 9090
+      targetPort: 9090
+      nodePort: 30090  # Optionally specify a NodePort within the range 30000-32767
+  type: NodePort
+```
+
+To check:
+```bash
+curl http://<node-ip>:30090/metrics
 ```
