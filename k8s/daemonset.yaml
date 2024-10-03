@@ -88,5 +88,4 @@ data:
       max_backups: 5
       max_size_mb: 200
     prometheus:
-      prometheus_host: "localhost"
       prometheus_port: "9090"
