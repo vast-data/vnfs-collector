@@ -33,6 +33,7 @@ update_dockerhub:
     VERSION=$(cat version.txt)
     echo "$DOCKERHUB_PW" | docker login --username "$DOCKERHUB_USER" --password-stdin
     export IMAGE_NAME=docker.io/vastdataorg/vnfs-collector:${VERSION}
+    make deb
     docker buildx create --name builder --use
     docker buildx build -f docker/debian.Dockerfile \
       --build-arg=VERSION="$VERSION" \
