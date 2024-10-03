@@ -15,7 +15,7 @@ spec:
       hostIPC: true
       containers:
         - name: vnfs-collector
-          image: fnn45/vnfs-collector
+          image: vastdataorg/vnfs-collector:1.0
           command: ["vnfs-collector", "-C", "/opt/nfsops/nfsops.yaml"]
           securityContext:
             privileged: true
@@ -88,5 +88,4 @@ data:
       max_backups: 5
       max_size_mb: 200
     prometheus:
-      prometheus_host: "localhost"
       prometheus_port: "9090"
