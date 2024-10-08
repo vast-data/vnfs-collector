@@ -244,47 +244,24 @@ kubectl exec -it ds/vnfs-collector -- vnfs-collector --help
 
 To expose the metrics to Prometheus, you need to create a service.
 The type of service you choose will depend on whether your Prometheus instance is running within the same cluster.
-If Prometheus is in the same cluster, you can use a ClusterIP service type:
+If Prometheus is in the same cluster, you can use a [Headless service](./k8s/service-headless-prom-exporter.yaml)
 
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: vnfs-collector-service
-spec:
-  selector:
-    app: vnfs-collector
-  ports:
-    - protocol: TCP
-      port: 9090
-      targetPort: 9090
-  type: ClusterIP
-```
+Complete setup can be achived by applying the following files
+- [vnfs-collector daemonset](./k8s/daemonset.yaml)
+- [vnfs-collector service](./k8s/service-headless-prom-exporter.yaml)
+- [prometheus configuration](./k8s/prometheus.yaml)
 
-To check. Being within cluster
+to get into prometheus ui execute:
 ```bash
-curl http://vnfs-collector-service:9090/metrics
+ kubectl port-forward svc/prometheus-service 9090:9090
 ```
 
-If Prometheus is running outside the cluster, you should use a NodePort service type:
+and follow http://localhost:9090/
 
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: vnfs-collector-service
-spec:
-  selector:
-    app: vnfs-collector
-  ports:
-    - protocol: TCP
-      port: 9090
-      targetPort: 9090
-      nodePort: 30090  # Optionally specify a NodePort within the range 30000-32767
-  type: NodePort
-```
+
+If Prometheus is running outside the cluster, you should use a [NodePort service type](./k8s/service-external-prom-exporter.yaml)
 
 To check:
 ```bash
-curl http://<node-ip>:30090/metrics
+curl http://<node-ip>:30900/metrics
 ```

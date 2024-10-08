@@ -7,6 +7,7 @@ spec:
     app: vnfs-collector
   ports:
     - protocol: TCP
-      port: 9090
-      targetPort: 9090
-  type: ClusterIP
+      port: 9000
+      targetPort: 9000
+      nodePort: 30900
+  type: NodePort
