@@ -15,7 +15,7 @@ spec:
       hostIPC: true
       containers:
         - name: vnfs-collector
-          image: vastdataorg/vnfs-collector:1.0
+          image: vastdataorg/vnfs-collector:1.1
           command: ["vnfs-collector", "-C", "/opt/nfsops/nfsops.yaml"]
           securityContext:
             privileged: true

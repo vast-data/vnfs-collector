@@ -16,7 +16,8 @@ ADD scripts/host-chroot.sh /opt/vnfs-collector/src/bin
 
 RUN \
    ln -s /opt/vnfs-collector/src/bin/host-chroot.sh /opt/vnfs-collector/src/bin/xz \
-   && ln -s /opt/vnfs-collector/src/bin/host-chroot.sh /opt/vnfs-collector/src/bin/modprobe
+   && ln -s /opt/vnfs-collector/src/bin/host-chroot.sh /opt/vnfs-collector/src/bin/modprobe \
+   && ln -s /opt/vnfs-collector/src/bin/host-chroot.sh /opt/vnfs-collector/src/bin/cat
 
 ENV PATH="/opt/vnfs-collector/src/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 

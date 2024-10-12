@@ -12,6 +12,7 @@ import re
 import numpy
 import psutil
 import socket
+import subprocess
 from threading import Thread
 from datetime import datetime
 from pathlib import Path
@@ -211,7 +212,12 @@ class MountsMap:
 
     def refresh_map_mountinfo(self):
         mountmap = {}
-        mounts = open(PROCFS_MOUNTINFO_PATH).readlines()
+        try:
+            # It's essential to use cat in a Dockerized environment to execute commands on behalf of the host.
+            result = subprocess.run(['cat', PROCFS_MOUNTINFO_PATH], capture_output=True, text=True, check=True)
+            mounts = result.stdout.splitlines()
+        except subprocess.CalledProcessError:
+            mounts = open(PROCFS_MOUNTINFO_PATH).readlines()
         for mount in mounts:
             parts = mount.split()
             devt = parts[2]
