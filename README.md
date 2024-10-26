@@ -29,6 +29,10 @@ Follow the instructions below based on the package type you need to build.
 
 General Prerequisites:
 Make sure you have make installed. This is typically available by default on most Linux distributions.
+In addition, python library build requires python3 build module:
+```bash
+pip3 install build
+```
 
 - DEB Packaging:
 
