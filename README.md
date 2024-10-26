@@ -88,7 +88,7 @@ Additionally:
 - the **vnfs-collector** systemd service will be installed and enabled.
   The service configuration file can be found at `/etc/systemd/system/vnfs-collector.service`.
 - the **vnfs-collector** configuration file will be placed at
-  `/etc/vnfs-collector/vnfs-collector.conf`.
+  `/opt/vnfs-collector/nfsops.yaml`.
   This file contains the default configuration options for the utility.
 
 systemd service can be started, stopped, and restarted using the following commands:
