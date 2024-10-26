@@ -14,8 +14,8 @@ async def test_prometheus_driver_setup():
         mock_exporter.assert_called_once_with(port=9000, addr="::")
 
         # Check if the driver was registered and logger info was called
-        assert driver.prometheus_host == "::"
-        assert driver.prometheus_port == 9000
+        assert driver.prom_exporter_host == "::"
+        assert driver.prom_exporter_port == 9000
         assert driver.buffer_size == 1000
         assert driver.local_buffer.maxlen == 1000
 

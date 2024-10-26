@@ -150,8 +150,8 @@ vdb:
   db_schema: <schema>
   db_table: <table>
 prometheus:
-  prometheus_host: 0.0.0.0
-  prometheus_port: 9000
+  prom_exporter_host: 0.0.0.0
+  prom_exporter_port: 9000
 ```
 
 **screen**, **file**, **vdb**, **kafka** and **prometheus** are the names of
@@ -246,7 +246,14 @@ kubectl exec -it ds/vnfs-collector -- vnfs-collector --help
 
 ##### Access prometheus exported metrics:
 
-To expose the metrics to Prometheus, you need to create a service.
+Enable vnfs-collector built-in prometheus exporter by setting the exporter *local* address **prom_exporter_host**
+and port **prom_exporter_port**.
+
+In addition, the collector sampling is mandated by the *\<interval\>* argument, and prometheus metrics are buffered
+(and merged if needed) between scraping periods. In order to have correlated scrapes, set the prometheus scrape
+interval to match the collector *\<interval\>* argument.
+
+To expose the metrics to Prometheus when deployed on k8s, you need to create a service.
 The type of service you choose will depend on whether your Prometheus instance is running within the same cluster.
 If Prometheus is in the same cluster, you can use a [Headless service](./k8s/service-headless-prom-exporter.yaml)
 

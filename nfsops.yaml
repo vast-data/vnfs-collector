@@ -17,8 +17,8 @@ file:
 #  db_schema: <schema>
 #  db_table: <table>
 # prometheus:
-#  prometheus_host: <host>
-#  prometheus_port: <port>
+#  prom_exporter_host: <host>
+#  prom_exporter_port: <port>
 # kafka:
 #  bootstrap_servers: <broker1:9093,broker2:9093>
 #  topic: vnfs-collector
