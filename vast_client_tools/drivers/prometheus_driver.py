@@ -103,4 +103,4 @@ class PrometheusDriver(DriverBase, Collector):
                             except:
                                 labels_kwargs.update({env: ""})
                     for s in STATKEYS.keys():
-                        yield self._create_gauge(s, "vnfs_" + STATKEYS[s], labels_kwargs, entry[s])
+                        yield self._create_gauge("vnfs_" + s, "vnfs_" + STATKEYS[s], labels_kwargs, entry[s])
