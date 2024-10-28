@@ -20,11 +20,11 @@ from vast_client_tools.nfsops import STATKEYS
 class PrometheusDriver(DriverBase, Collector):
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
-        "--prometheus-host", default="::",
+        "--prom-exporter-host", default="::",
         help="Prometheus exporter host."
     )
     parser.add_argument(
-        "--prometheus-port", default=9000, type=int,
+        "--prom-exporter-port", default=9000, type=int,
         help="Prometheus exporter port."
     )
     parser.add_argument(
@@ -36,16 +36,16 @@ class PrometheusDriver(DriverBase, Collector):
     def __str__(self):
         return (
             f"{self.__class__.__name__}"
-            f"(prometheus_host={self.prometheus_host},"
-            f" prometheus_port={self.prometheus_port},"
+            f"(prom_exporter_host={self.prom_exporter_host},"
+            f" prom_exporter_port={self.prom_exporter_port},"
             f" buffer_size={self.buffer_size})"
         )
 
     async def setup(self, args=(), namespace=None):
         args = await super().setup(args, namespace)
         self.lock = Lock()
-        self.prometheus_host = args.prometheus_host
-        self.prometheus_port = args.prometheus_port
+        self.prom_exporter_host = args.prom_exporter_host
+        self.prom_exporter_port = args.prom_exporter_port
         self.buffer_size = args.buffer_size
         self.local_buffer = deque(maxlen=self.buffer_size)
 
@@ -53,7 +53,7 @@ class PrometheusDriver(DriverBase, Collector):
         prom.REGISTRY.unregister(prom.PLATFORM_COLLECTOR)
         prom.REGISTRY.unregister(prom.GC_COLLECTOR)
         prom.REGISTRY.register(self)
-        exporter = prom.start_http_server(port=self.prometheus_port, addr=self.prometheus_host)
+        exporter = prom.start_http_server(port=self.prom_exporter_port, addr=self.prom_exporter_host)
         if exporter:
             self.exporter = exporter[0]
         self.logger.info(f"{self} has been initialized.")
@@ -103,4 +103,4 @@ class PrometheusDriver(DriverBase, Collector):
                             except:
                                 labels_kwargs.update({env: ""})
                     for s in STATKEYS.keys():
-                        yield self._create_gauge(s, STATKEYS[s], labels_kwargs, entry[s])
+                        yield self._create_gauge(s, "vnfs_" + STATKEYS[s], labels_kwargs, entry[s])
