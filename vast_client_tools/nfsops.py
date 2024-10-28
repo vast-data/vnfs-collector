@@ -186,6 +186,24 @@ def anonymize_stats(data: pd.DataFrame, anon_fields: list):
 
     return data
 
+def get_pid_envs(self, pid, envs):
+    res = {}
+    try:
+        environ = open("/proc/%d/environ" % pid).read().split('\x00')[:-1]
+    except:
+        return res
+
+    def match(envs, env):
+        for e in envs:
+            if env.startswith(e):
+                return True
+        return False
+
+    try:
+        res = {env.split('=')[0]: env.split('=')[1] for env in environ if match(envs, env)}
+    except:
+        pass
+    return res
 
 class MountInfo:
 
@@ -303,7 +321,7 @@ class EnvTracer:
         self.pid_env_map = pid_env_map
 
     def start(self):
-        self.b["events"].open_perf_buffer(self.get_pid_envs)
+        self.b["events"].open_perf_buffer(self.get_process_envs)
         self.t = Thread(target=self.trace_pid_exec)
         self.t.daemon = True
         self.t.start()
@@ -317,20 +335,9 @@ class EnvTracer:
             self.b.perf_buffer_poll()
             self.pid_env_map.vaccum_if_needed()
 
-    def get_pid_envs(self, cpu, data, size):
+    def get_process_envs(self, cpu, data, size):
         data = self.b["events"].event(data)
-        try:
-            environ = open("/proc/%d/environ" % data.pid).read().split('\x00')[:-1]
-        except:
-            return
-
-        def match(envs, env):
-            for e in envs:
-                if env.startswith(e):
-                    return True
-            return False
-
-        envs = {env.split('=')[0]: env.split('=')[1] for env in environ if match(self.envs, env)}
+        envs = get_pid_envs(data.pid, self.envs)
         if envs:
             self.pid_env_map.insert(data.pid, envs)
 
