@@ -22,9 +22,6 @@ from vast_client_tools.logger import get_logger, COLORS
 
 logger = get_logger("nfsops", COLORS.magenta)
 
-
-PROCFS_MOUNTINFO_PATH = "/proc/self/mountinfo"
-
 class hashabledict(dict):
     def __hash__(self):
         return hash(tuple(sorted(self.items())))
@@ -208,9 +205,9 @@ class MountsMap:
     def __init__(self):
         self.map = {}
 
-    def refresh_map_mountinfo(self):
+    def refresh_map_mountinfo(self, pid):
         mountmap = {}
-        mounts = open(PROCFS_MOUNTINFO_PATH).readlines()
+        mounts = open("/proc/%d/mountinfo" % pid).readlines()
         for mount in mounts:
             parts = mount.split()
             devt = parts[2]
@@ -235,12 +232,12 @@ class MountsMap:
         MINORBITS = 20
         return "{}:{}".format(st_dev >> MINORBITS, st_dev & 2**MINORBITS-1)
 
-    def get_mountpoint(self, st_dev):
+    def get_mountpoint(self, st_dev, pid):
         dev = self.devt_to_str(st_dev)
         try:
             return self.map[dev]
         except KeyError:
-            self.refresh_map_mountinfo()
+            self.refresh_map_mountinfo(pid)
             if dev in self.map.keys():
                 return self.map[dev]
             self.refresh_map()
@@ -483,7 +480,7 @@ class StatsCollector:
                     "LISTXATTR_DURATION":nstosec(v.listxattr.duration),
                     "TAGS":         hashabledict(self.pid_env_map.get(k.tgid)),
             }
-            mount_info = self.mounts_map.get_mountpoint(k.sbdev)
+            mount_info = self.mounts_map.get_mountpoint(k.sbdev, k.tgid)
             if mount_info:
                 output["MOUNT"] = mount_info.mountpoint
                 output["REMOTE_PATH"] = mount_info.remote_path
