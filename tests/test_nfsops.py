@@ -171,7 +171,7 @@ def test_get_mountpoint(mock_stat):
     assert mount_info2.device == '172.17.0.2:/mnt/test2'
 
 
-@patch.object(nfsops, "PROCFS_MOUNTINFO_PATH", ROOT / "data" / "mounts")
+@patch.object(MountsMap, "get_mountinfo", MagicMock(return_value=f"{ROOT}/data/mounts"))
 @patch.object(MountsMap, "refresh_map", MagicMock())
 def test_refresh_map_mountinfo():
     mounts_map = MountsMap()
