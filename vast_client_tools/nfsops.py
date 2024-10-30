@@ -207,7 +207,6 @@ class MountInfo:
 class MountsMap:
     def __init__(self):
         self.map = {}
-        self.refresh_map()
 
     def refresh_map_mountinfo(self):
         mountmap = {}
