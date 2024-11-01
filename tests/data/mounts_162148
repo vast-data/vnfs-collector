@@ -1,0 +1,1 @@
+3518 30 0:420 / /mnt/mydir rw,relatime shared:51 - nfs4 172.17.0.5:/remote rw,vers=4.2,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=172.17.0.1,local_lock=none,addr=172.17.0.2
