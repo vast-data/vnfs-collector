@@ -202,15 +202,16 @@ class MountInfo:
 
 
 class MountsMap:
-    def __init__(self):
+    def __init__(self, vaccum_interval=600):
         self.map = {}
+        self.vaccum_interval = vaccum_interval
+        self.start = datetime.now()
         self.refresh_map_mountinfo()
 
     def get_mountinfo(self, pid):
         return f"/proc/{pid}/mountinfo"
 
     def refresh_map_mountinfo(self, pid="self"):
-        mountmap = {}
         try:
             mounts = open(self.get_mountinfo(pid)).readlines()
         except:
@@ -226,17 +227,14 @@ class MountsMap:
             device = parts[parts.index("-") + 2]
             if 'nfs' not in fstype:
                 continue
-            mountmap[devt] = MountInfo(mountpoint, device)
-        self.map = mountmap
+            self.map[devt] = MountInfo(mountpoint, device)
 
     def refresh_map(self):
-        mountmap = {}
         for p in psutil.disk_partitions(all=True):
             if 'nfs' not in p.fstype:
                 continue
             devt = self.devt_to_str(os.stat(p.mountpoint).st_dev)
-            mountmap[devt] = MountInfo(p.mountpoint, p.device)
-        self.map = mountmap
+            self.map[devt] = MountInfo(p.mountpoint, p.device)
 
     def devt_to_str(self, st_dev):
         MINORBITS = 20
@@ -247,6 +245,10 @@ class MountsMap:
         try:
             return self.map[dev]
         except KeyError:
+            if (datetime.now() - self.start).total_seconds() > self.vaccum_interval:
+                self.map = {}
+                self.start = datetime.now()
+            # refresh our view on the mountinfo map
             self.refresh_map_mountinfo(pid)
             if dev in self.map.keys():
                 return self.map[dev]
