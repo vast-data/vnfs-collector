@@ -1,7 +1,8 @@
+import datetime
+
 import pandas as pd
 import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
-import vast_client_tools.nfsops as nfsops
+from unittest.mock import patch, MagicMock
 from vast_client_tools.nfsops import (
     group_stats,
     filter_stats,
@@ -46,9 +47,6 @@ def test_group_stats_by_pid(data):
     # TAGS not included in grouping for testing purposes
     grouped_by_comm = group_stats(data, ["MOUNT", "PID"])
     total_readdr_duration = data.READDIR_DURATION.sum()
-
-    print(grouped_by_comm)
-
     assert len(grouped_by_comm) == 2
     first_row = grouped_by_comm.iloc[0]
     second_row = grouped_by_comm.iloc[1]
@@ -171,7 +169,7 @@ def test_get_mountpoint(mock_stat):
     assert mount_info2.device == '172.17.0.2:/mnt/test2'
 
 
-@patch.object(nfsops, "PROCFS_MOUNTINFO_PATH", ROOT / "data" / "mounts")
+@patch.object(MountsMap, "get_mountinfo", MagicMock(return_value=f"{ROOT}/data/mounts_self"))
 @patch.object(MountsMap, "refresh_map", MagicMock())
 def test_refresh_map_mountinfo():
     mounts_map = MountsMap()
@@ -196,6 +194,53 @@ def test_get_mountpoint_with_missing_device(mock_stat, mock_disk_partitions):
     mount_info = mounts_map.get_mountpoint(123456)
 
     assert mount_info is None
+
+
+def _mountinfo_side_effect(pid):
+    if pid == "self":
+        return f"{ROOT}/data/mounts_self"
+    elif pid == "162148":
+        return f"{ROOT}/data/mounts_162148"
+    elif pid == "162149":
+        return f"{ROOT}/data/mounts_162149"
+    raise NotImplementedError()
+
+
+@patch.object(MountsMap, "get_mountinfo", side_effect=_mountinfo_side_effect)
+@patch.object(MountsMap, "refresh_map",  MagicMock())
+def test_get_mount_info_from_different_mountinfo_files(*_):
+    mounts_map = MountsMap()
+    mount_info = mounts_map.get_mountpoint(321, "self")
+    assert mount_info.remote_path == "/"
+    assert mount_info.mountpoint == "/mnt/test"
+    assert set(mounts_map.map) == {'0:321', '0:69'}
+
+    # Doesn't exist in mounts_self file
+    mount_info = mounts_map.get_mountpoint(420, "self")
+    assert mount_info is None
+    assert set(mounts_map.map) == {'0:321', '0:69'}
+
+    mount_info = mounts_map.get_mountpoint(420, "162148")
+    assert mount_info.remote_path == "/remote"
+    assert mount_info.mountpoint == "/mnt/mydir"
+    assert set(mounts_map.map) == {'0:420', '0:321', '0:69'}
+
+    # No changes as well. 162149 is pointed to the same detv
+    mount_info = mounts_map.get_mountpoint(420, "162149")
+    assert mount_info.remote_path == "/remote"
+    assert mount_info.mountpoint == "/mnt/mydir"
+    assert set(mounts_map.map) == {'0:420', '0:321', '0:69'}
+
+    # Reset vacuum timeout
+    mounts_map.start = datetime.datetime(2000, 1, 1)
+    # Wrong devt. It should cause resetting the map
+    mount_info = mounts_map.get_mountpoint(421, "self")
+    assert mount_info is None
+    assert set(mounts_map.map) == {'0:321', '0:69'}
+    mount_info = mounts_map.get_mountpoint(420, "162149")
+    assert mount_info.remote_path == "/remote"
+    assert mount_info.mountpoint == "/mnt/mydir2"
+    assert set(mounts_map.map) == {'0:420', '0:321', '0:69'}
 
 
 def test_anonymize_valid_fields(data):

@@ -22,9 +22,6 @@ from vast_client_tools.logger import get_logger, COLORS
 
 logger = get_logger("nfsops", COLORS.magenta)
 
-
-PROCFS_MOUNTINFO_PATH = "/proc/self/mountinfo"
-
 class hashabledict(dict):
     def __hash__(self):
         return hash(tuple(sorted(self.items())))
@@ -205,12 +202,23 @@ class MountInfo:
 
 
 class MountsMap:
-    def __init__(self):
+    def __init__(self, vaccum_interval=600):
         self.map = {}
+        self.vaccum_interval = vaccum_interval
+        self.start = datetime.now()
+        self.refresh_map_mountinfo()
 
-    def refresh_map_mountinfo(self):
-        mountmap = {}
-        mounts = open(PROCFS_MOUNTINFO_PATH).readlines()
+    def get_mountinfo(self, pid):
+        return f"/proc/{pid}/mountinfo"
+
+    def refresh_map_mountinfo(self, pid="self"):
+        try:
+            mounts = open(self.get_mountinfo(pid)).readlines()
+        except:
+            # pid is gone... open our mountinfo proc file
+            logger.debug(f"MountsMap: pid: {pid} is gone...")
+            mounts = open(self.get_mountinfo("self")).readlines()
+
         for mount in mounts:
             parts = mount.split()
             devt = parts[2]
@@ -219,28 +227,29 @@ class MountsMap:
             device = parts[parts.index("-") + 2]
             if 'nfs' not in fstype:
                 continue
-            mountmap[devt] = MountInfo(mountpoint, device)
-        self.map = mountmap
+            self.map[devt] = MountInfo(mountpoint, device)
 
     def refresh_map(self):
-        mountmap = {}
         for p in psutil.disk_partitions(all=True):
             if 'nfs' not in p.fstype:
                 continue
             devt = self.devt_to_str(os.stat(p.mountpoint).st_dev)
-            mountmap[devt] = MountInfo(p.mountpoint, p.device)
-        self.map = mountmap
+            self.map[devt] = MountInfo(p.mountpoint, p.device)
 
     def devt_to_str(self, st_dev):
         MINORBITS = 20
         return "{}:{}".format(st_dev >> MINORBITS, st_dev & 2**MINORBITS-1)
 
-    def get_mountpoint(self, st_dev):
+    def get_mountpoint(self, st_dev, pid="self"):
         dev = self.devt_to_str(st_dev)
         try:
             return self.map[dev]
         except KeyError:
-            self.refresh_map_mountinfo()
+            if (datetime.now() - self.start).total_seconds() > self.vaccum_interval:
+                self.map = {}
+                self.start = datetime.now()
+            # refresh our view on the mountinfo map
+            self.refresh_map_mountinfo(pid)
             if dev in self.map.keys():
                 return self.map[dev]
             self.refresh_map()
@@ -483,7 +492,7 @@ class StatsCollector:
                     "LISTXATTR_DURATION":nstosec(v.listxattr.duration),
                     "TAGS":         hashabledict(self.pid_env_map.get(k.tgid)),
             }
-            mount_info = self.mounts_map.get_mountpoint(k.sbdev)
+            mount_info = self.mounts_map.get_mountpoint(k.sbdev, k.tgid)
             if mount_info:
                 output["MOUNT"] = mount_info.mountpoint
                 output["REMOTE_PATH"] = mount_info.remote_path

@@ -194,7 +194,7 @@ async def _exec():
     # initialize BPF
     bpf = BPF(text=bpf_text)
     pidEnvMap = PidEnvMap(vaccum_interval=args.vaccum)
-    mountsMap = MountsMap()
+    mountsMap = MountsMap(vaccum_interval=args.vaccum)
     collector = StatsCollector(bpf=bpf, pid_env_map=pidEnvMap, mounts_map=mountsMap)
     mgr = NamedExtensionManager(
         namespace=ENTRYPOINT_GROUP,
