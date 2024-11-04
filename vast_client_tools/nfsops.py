@@ -186,6 +186,24 @@ def anonymize_stats(data: pd.DataFrame, anon_fields: list):
 
     return data
 
+def get_pid_envs(pid, envs):
+    res = {}
+    try:
+        environ = open("/proc/%d/environ" % pid).read().split('\x00')[:-1]
+    except:
+        return res
+
+    def match(envs, env):
+        for e in envs:
+            if env.startswith(e):
+                return True
+        return False
+
+    try:
+        res = {env.split('=')[0]: env.split('=')[1] for env in environ if match(envs, env)}
+    except:
+        pass
+    return res
 
 class MountInfo:
 
@@ -284,12 +302,17 @@ class PidEnvMap:
         logger.debug("PidEnvMap: insert pid[%d]" % pid)
         logger.debug(self.pidmap)
 
-    def get(self, pid):
+    def get(self, pid, envs=None):
         try:
             return self.pidmap[str(pid)]
         except:
             logger.debug("pid %d not found" % pid)
             logger.debug(self.pidmap)
+            if envs:
+                self.pidmap[str(pid)] = get_pid_envs(pid, envs)
+                if self.pidmap[str(pid)]:
+                    logger.warning("pid %d found late" % pid)
+                return self.pidmap[str(pid)]
             return {}
 
 class EnvTracer:
@@ -303,7 +326,7 @@ class EnvTracer:
         self.pid_env_map = pid_env_map
 
     def start(self):
-        self.b["events"].open_perf_buffer(self.get_pid_envs)
+        self.b["events"].open_perf_buffer(self.get_process_envs)
         self.t = Thread(target=self.trace_pid_exec)
         self.t.daemon = True
         self.t.start()
@@ -317,20 +340,9 @@ class EnvTracer:
             self.b.perf_buffer_poll()
             self.pid_env_map.vaccum_if_needed()
 
-    def get_pid_envs(self, cpu, data, size):
+    def get_process_envs(self, cpu, data, size):
         data = self.b["events"].event(data)
-        try:
-            environ = open("/proc/%d/environ" % data.pid).read().split('\x00')[:-1]
-        except:
-            return
-
-        def match(envs, env):
-            for e in envs:
-                if env.startswith(e):
-                    return True
-            return False
-
-        envs = {env.split('=')[0]: env.split('=')[1] for env in environ if match(self.envs, env)}
+        envs = get_pid_envs(data.pid, self.envs)
         if envs:
             self.pid_env_map.insert(data.pid, envs)
 
@@ -340,10 +352,11 @@ class StatsCollector:
     Tracer traps pid execution and collects the existance of the tracked
     environment variables.
     """
-    def __init__(self, bpf, pid_env_map, mounts_map):
+    def __init__(self, bpf, pid_env_map, mounts_map, envs):
         self.b = bpf
         self.pid_env_map = pid_env_map
         self.mounts_map = mounts_map
+        self.envs = envs
         self.hostname = os.getenv("HOSTNAME", socket.gethostname())
         # check whether hash table batch ops is supported
         self.batch_ops = True if BPF.kernel_struct_has_field(b'bpf_map_ops',
@@ -490,7 +503,7 @@ class StatsCollector:
                     "LISTXATTR_COUNT":  v.listxattr.count,
                     "LISTXATTR_ERRORS": v.listxattr.errors,
                     "LISTXATTR_DURATION":nstosec(v.listxattr.duration),
-                    "TAGS":         hashabledict(self.pid_env_map.get(k.tgid)),
+                    "TAGS":         hashabledict(self.pid_env_map.get(k.tgid, self.envs)),
             }
             mount_info = self.mounts_map.get_mountpoint(k.sbdev, k.tgid)
             if mount_info:
