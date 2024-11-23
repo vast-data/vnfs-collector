@@ -29,22 +29,37 @@ pylib_wheel=vast_client_tools-%{_version}-py3-none-any.whl
 install -m 755 %{_sourcedir}/dist/$pylib_wheel %{buildroot}/opt/$pname/src/
 install -m 755 %{_sourcedir}/version.txt %{buildroot}/opt/$pname/src/
 install -m 755 %{_sourcedir}/nfsops.yaml %{buildroot}/opt/$pname/
-install -m 644 %{_sourcedir}/systemd/$pname.service %{buildroot}/opt/$pname/src/
+mkdir -p %{buildroot}/etc/systemd/system/
+install -m 644 %{_sourcedir}/systemd/$pname.service %{buildroot}/etc/systemd/system/
 cp -r %{_sourcedir}/hack/* %{buildroot}/opt/$pname/src/hack/
 
 %files
 /opt/vnfs-collector
+%config(noreplace)/opt/vnfs-collector/nfsops.yaml
+/etc/systemd/system/vnfs-collector.service
 
 %post
 #!/bin/bash
 set -e
 /opt/vnfs-collector/src/hack/pack_install.sh
+if systemctl daemon-reload > /dev/null 2>&1; then
+	systemctl enable vnfs-collector
+fi
 
 %preun
 #!/bin/bash
 set -e
-/opt/vnfs-collector/src/hack/pack_uninstall.sh
+if [ $1 == "0" ]; then # uninstall
+	SERVICE_NAME="vnfs-collector"
+	# Stop the systemd service if it's running
+	if systemctl is-active --quiet "${SERVICE_NAME}"; then
+	    systemctl stop "${SERVICE_NAME}"
+	fi
 
+	# Disable the systemd service
+	systemctl disable "${SERVICE_NAME}" 2>/dev/null || true
+	/opt/vnfs-collector/src/hack/pack_uninstall.sh
+fi
 
 %changelog
 * Thu Jul 11 2024 Sagi Grimberg <sagi@grimberg.me> - 1.0
