@@ -276,3 +276,12 @@ To check:
 ```bash
 curl http://<node-ip>:30900/metrics
 ```
+
+##### Grafana Dashboards
+
+After setting up the Promatheus exporter, you may use our two built-in [Grafana dashboards] (./grafana_dashboards), to plot the metrics.
+
+To use the dashboards, please import the .json files to your Grafana instance, and then select the Prometheus instance that you've configured as your datasource.
+
+[NFS client metrics dashboard] (./grafana_dashboards/NFS_Client_Metrics.json) - Statistics per JOBID, mount, remote path, UID and client.
+[Commands per JOBID dashboard] (./grafana_dashboards/Commands_per_JOBID.json) - Flow of commands per JOBID. 
