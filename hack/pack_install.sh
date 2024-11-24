@@ -43,9 +43,4 @@ echo "Creating symlink from ${VENV_PATH}/bin/vnfs-collector -> ${SYMLINK_PATH}"
 ln -s "${VENV_PATH}/bin/vnfs-collector" "${SYMLINK_PATH}"
 
 
-cp "${SYSTEMD}" /etc/systemd/system/vnfs-collector.service && rm -f "${SYSTEMD}"
-# Check if systemctl can be executed
-if systemctl daemon-reload > /dev/null 2>&1; then
-  # systemctl is available and systemd is likely the init system.
-  systemctl enable vnfs-collector
-fi
+

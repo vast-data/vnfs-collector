@@ -1,3 +1,13 @@
+vnfs-collector (1.1) unstable; urgency=low
+
+  * various bug fixes in the collector ebpf
+  * Fix some naming/documentation related to prometheus exporter
+  * added k8s daemonset deployment
+  * fix mount resolution (again)
+  * args parsing fixes
+
+ -- Sagi Grimberg <sagi@grimberg.me>  Mon, 28 Oct 2024 10:16:33 +0200
+
 vnfs-collector (1.0) unstable; urgency=low
 
   * Initial release.
