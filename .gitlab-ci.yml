@@ -30,7 +30,7 @@ update_dockerhub:
   stage: deploy
   script: |
     set -x
-    VERSION=$(cat version.txt)
+    VERSION=$(cat version.txt)-$(git rev-parse --short HEAD)
     echo "$DOCKERHUB_PW" | docker login --username "$DOCKERHUB_USER" --password-stdin
     export IMAGE_NAME=docker.io/vastdataorg/vnfs-collector:${VERSION}
     make deb

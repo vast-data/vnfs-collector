@@ -5,6 +5,7 @@ debian/files
 debian/vnfs-collector*
 nfsstats-*.log
 nsfops.log
+debian/changelog
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
