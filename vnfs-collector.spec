@@ -62,7 +62,7 @@ if [ $1 == "0" ]; then # uninstall
 fi
 
 %changelog
-* Mon 28 Oct 2024 Sagi Grimberg <sagi@grimberg.me> - 1.1
+* Mon Oct 28 2024 Sagi Grimberg <sagi@grimberg.me> - 1.1
 - various bug fixes in the collector ebpf
 - Fix some naming/documentation related to prometheus exporter
 - added k8s daemonset deployment
