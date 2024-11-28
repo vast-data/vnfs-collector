@@ -1,6 +1,6 @@
 Name:           vnfs-collector
 Version:        %{_version}
-Release:        1%{?dist}
+Release:        %{_release}
 Summary:        NFS metrics collector based on eBPF
 BuildArch:      noarch
 License:        Apache-2.0

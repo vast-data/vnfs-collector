@@ -1,4 +1,4 @@
-vnfs-collector (1.1) unstable; urgency=low
+vnfs-collector (_VERSION_) unstable; urgency=low
 
   * various bug fixes in the collector ebpf
   * Fix some naming/documentation related to prometheus exporter
