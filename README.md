@@ -244,6 +244,16 @@ To get information about all available options use:
 kubectl exec -it ds/vnfs-collector -- vnfs-collector --help
 ```
 
+To update the and apply a modified [configuration configmap](./k8s/daemonset.yaml), restart the daemonset using:
+```bash
+kubectl rollout restart ds/vnfs-collector
+```
+
+You can watch the restart rollout progress using:
+```bash
+kubectl rollout status ds/vnfs-collector
+```
+
 ##### Access prometheus exported metrics:
 
 Enable vnfs-collector built-in prometheus exporter by setting the exporter *local* address **prom_exporter_host**
