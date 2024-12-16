@@ -333,7 +333,7 @@ class EnvTracer:
 
     def attach(self):
         if self.envs:
-            self.b.attach_kretprobe(event=self.b.get_syscall_fnname("execve"), fn_name="trace_execve")
+            self.b.attach_kprobe(event=self.b.get_syscall_fnname("execve"), fn_name="trace_execve")
 
     def trace_pid_exec(self):
         while True:
