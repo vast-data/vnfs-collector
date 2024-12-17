@@ -5,7 +5,7 @@ Summary:        NFS metrics collector based on eBPF
 BuildArch:      noarch
 License:        Apache-2.0
 Provides:       vnfs-collector
-Requires:       python3 python3-bcc >= 0.23.0
+Requires:       python3 python3-bcc
 Requires(post): systemd
 
 %description
