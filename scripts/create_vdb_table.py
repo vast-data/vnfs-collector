@@ -89,7 +89,8 @@ arrow_schema = pa.schema(
         ("LISTXATTR_ERRORS", pa.int32()),
         ("LISTXATTR_DURATION", pa.float64()),
         ("MOUNT", pa.utf8()),
-        ('TAGS', pa.map_(pa.string(), pa.string())),
+        ("TAGS", pa.map_(pa.string(), pa.string())),
+        ("TIMEDELTA", pa.int32()),
     ]
 )
 

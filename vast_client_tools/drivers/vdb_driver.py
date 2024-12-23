@@ -29,7 +29,13 @@ class VdbDriver(DriverBase):
         from vastdb.api import VastdbApi
 
         args = await super().setup(args, namespace)
-        self.db_endpoint = args.db_endpoint.strip("http://").strip("https://")
+        if args.db_endpoint.startswith("http://"):
+            self.db_endpoint = args.db_endpoint[len("http://"):]
+        elif args.db_endpoint.startswith("https://"):
+            self.db_endpoint = args.db_endpoint[len("https://"):]
+        else:
+            self.db_endpoint = args.db_endpoint
+
         self.db_access_key = args.db_access_key
         self.db_secret_key = args.db_secret_key
         self.db_bucket = args.db_bucket
@@ -54,11 +60,22 @@ class VdbDriver(DriverBase):
         del vastapi
 
     async def store_sample(self, data):
+        from vastdb.api import VastdbApi
+
         df_copy = data.copy()
         df_copy['TAGS'] = df_copy['TAGS'].apply(lambda d: list(d.items()))
+        df_copy['TIMEDELTA'] = self.common_args.interval
         record_batch = pa.RecordBatch.from_pandas(df=df_copy, schema=self.arrow_schema)
-        vastapi = VastdbApi(host=self.db_endpoint, access_key=self.db_access_key,
-                            secret_key=self.db_secret_key, secure=self.db_ssl_verify)
-        vastapi.insert(bucket=self.db_bucket, schema=self.db_schema, table=self.db_table,
-                       record_batch=record_batch)
+        vastapi = VastdbApi(
+            host=self.db_endpoint,
+            access_key=self.db_access_key,
+            secret_key=self.db_secret_key,
+            secure=self.db_ssl_verify
+        )
+        vastapi.insert(
+            bucket=self.db_bucket,
+            schema=self.db_schema,
+            table=self.db_table,
+            record_batch=record_batch,
+        )
         del vastapi
