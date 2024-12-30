@@ -32,10 +32,16 @@ deb: distdir pylib
 	@mv ../vnfs-collector*.buildinfo ../vnfs-collector*.changes dist/
 
 clean:
-	@rm -rf dist/ version.txt
+	@rm -rf dist/ version.txt vast-client-metrics.pdf
 
 up: deb
 	@export VERSION=${SEMANTIC_VERSION}-${GIT_VERSION} && docker compose up
 
 docker_build: deb
 	@docker build -f docker/debian.Dockerfile -t vnfs-collector --build-arg="VERSION=${SEMANTIC_VERSION}-${GIT_VERSION}" .
+
+readme_pdf:
+	@rm -f /tmp/README.md
+	@cp README.md /tmp/README.md
+	@./scripts/append_yamls.sh /tmp/README.md ./k8s
+	@pandoc /tmp/README.md -o vast-client-metrics.pdf --pdf-engine=pdfroff
