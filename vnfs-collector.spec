@@ -23,7 +23,7 @@ mkdir -p %{buildroot}/opt/vnfs-collector/src/hack
 # Extract version from version.txt
 
 pname=vnfs-collector
-pylib_wheel=vast_client_tools-%{_version}-py3-none-any.whl
+pylib_wheel=vast_client_tools-%{_version}.%{_post}-py3-none-any.whl
 
 # Install the tarball and other files
 install -m 755 %{_sourcedir}/dist/$pylib_wheel %{buildroot}/opt/$pname/src/

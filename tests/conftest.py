@@ -20,7 +20,6 @@ module = importlib.util.module_from_spec(spec)
 sys.modules["bcc"] = module
 spec.loader.exec_module(module)
 
-
 @pytest.fixture(scope="session")
 def data():
     from vast_client_tools.nfsops import hashabledict

@@ -16,7 +16,7 @@ pname:=vnfs-collector
 install_path=$(CURDIR)/debian/$(pname)
 
 # Read version from version.txt
-pylib_version=$(shell cat version.txt)
+pylib_version=$(shell cat version.txt | sed 's/-/.post/')
 pylib_wheel=vast_client_tools-$(pylib_version)-py3-none-any.whl
 
 %:
