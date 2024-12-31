@@ -9,7 +9,7 @@ VENV_PATH="/opt/vnfs-collector/src/venv"
 SYMLINK_PATH="/usr/local/bin/vnfs-collector"
 VERSION_FILE="/opt/vnfs-collector/src/version.txt"
 SYSTEMD="/opt/vnfs-collector/src/vnfs-collector.service"
-PYLIB_VERSION=$(cat "${VERSION_FILE}")
+PYLIB_VERSION=$(cat "${VERSION_FILE}" | sed 's/-/.post/')
 PY_WHEEL="/opt/vnfs-collector/src/vast_client_tools-${PYLIB_VERSION}-py3-none-any.whl"
 
 # Ensure the virtual environment directory exists

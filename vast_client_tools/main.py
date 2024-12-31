@@ -166,7 +166,10 @@ async def _exec():
             conf_parser.error(f"Invalid anonymized fields specified: {', '.join(invalid_fields)}")
 
     logger.info(f"BPF version: {__version__}")
-    collector_version = BASE_PATH.joinpath("version.txt").read_text()
+    try:
+        collector_version = BASE_PATH.joinpath("version.txt").read_text()
+    except:
+        collector_version = "0.0+local.dummy"
     logger.info(f"VNFS Collector<{COLORS.intense_blue(collector_version)}> initialization")
     logger.info(
         f"Configuration options: "

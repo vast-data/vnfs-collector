@@ -5,7 +5,10 @@ import subprocess
 
 PACKAGE = "vast_client_tools"
 ROOT = os.path.dirname(__file__)
-VERSION = open(os.path.join(ROOT, "version.txt")).read().strip()
+try:
+    VERSION = open(os.path.join(ROOT, "version.txt")).read().strip()
+except:
+    VERSION = "0.0+local.dummy"
 
 # link bcc lib from dist-packages.
 subprocess.run([sys.executable, os.path.join(ROOT, PACKAGE, "link_bcc.py")])
