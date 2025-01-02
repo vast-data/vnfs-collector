@@ -150,7 +150,7 @@ conf_parser.add_argument(
     help="Dump BPF program text and exit."
 )
 conf_parser.add_argument(
-    "--squash-pid", type=bool, default=True,
+    "--squash-pid", type=maybe_bool_parse, default=True,
     help="Squash PIDs during statistics aggregation. This will group statistics by command, mount, and tags."
 )
 conf_parser.add_argument(
@@ -163,6 +163,19 @@ conf_parser.add_argument(
     "--anon-fields", type=maybe_list_parse,
     help="Comma separated list of fields to anonymize."
          " Field values for such fields becomes '--' for string and 0 for integers/floats."
+)
+conf_parser.add_argument(
+    "--envs-from-vdb-schema", type=maybe_bool_parse, default=False,
+    help="Learn environment variables from the VDB schema instead of user input. "
+         "The collector identifies columns in the schema with the format 'ENV_<name>'\n"
+         " and treats '<name>' as an environment variable. Cannot be used with user-provided envs."
+)
+conf_parser.add_argument(
+    "--vdb-schema-refresh-interval",
+    type=int,
+    default=300,  # default is 5 minutes (300 seconds)
+    help="Specify how often to re-read the VDB schema, in seconds. "
+         "If not provided, the default is 5 minutes (300 seconds)."
 )
 conf_parser.add_argument(
     "-C", "--cfg", default=None,
@@ -201,6 +214,9 @@ async def _exec():
     if args.tag_filter and not args.envs:
         conf_parser.error("--tag-filter requires --envs to be specified.")
 
+    if args.envs_from_vdb_schema and args.envs:
+        conf_parser.error("--envs-from-vdb-schema and --envs are mutually exclusive.")
+
     if args.anon_fields:
         invalid_fields = set(args.anon_fields).difference(ANON_FIELDS)
         if invalid_fields:
@@ -212,17 +228,24 @@ async def _exec():
     except:
         collector_version = "0.0+local.dummy"
     logger.info(f"VNFS Collector<{COLORS.intense_blue(collector_version)}> initialization")
+    display_options = [
+        ("drivers", drivers),
+        ("interval", args.interval),
+        ("vaccum", args.vaccum),
+        ("envs", args.envs),
+        ("ebpf", args.ebpf),
+        ("squash-pid", args.squash_pid),
+        ("tag-filter", args.tag_filter),
+        ("anon-fields", args.anon_fields),
+        ("config", args.cfg),
+        ("envs-from-vdb-schema", args.envs_from_vdb_schema),
+    ]
+    if args.envs_from_vdb_schema:
+        display_options.append(("vdb-schema-refresh-interval", args.vdb_schema_refresh_interval))
+
     logger.info(
         f"Configuration options: "
-        f"drivers={drivers}, "
-        f"interval={args.interval}, "
-        f"vaccum={args.vaccum}, "
-        f"envs={args.envs}, "
-        f"ebpf={args.ebpf}, "
-        f"squash-pid={args.squash_pid}, "
-        f"tag-filter={args.tag_filter}, "
-        f"anon-fields={args.anon_fields}, "
-        f"config={args.cfg}"
+        f"{', '.join(f'{k}={v}' for k, v in display_options)}"
     )
     # read BPF program text
     with BASE_PATH.joinpath("nfsops.c").open() as f:
@@ -270,7 +293,7 @@ async def _exec():
 
     if not stop_event.is_set():
         # if no envs are given, no need to track
-        if args.envs:
+        if args.envs_from_vdb_schema or args.envs:
             envTracer = EnvTracer(_args=args, bpf=bpf, pid_env_map=pidEnvMap)
             envTracer.attach()
             envTracer.start()
