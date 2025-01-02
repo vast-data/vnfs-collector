@@ -297,6 +297,7 @@ async def _exec():
             break
 
         data = collector.collect_stats(
+            interval=args.interval,
             squash_pid=args.squash_pid,
             filter_tags=args.envs,
             filter_condition=args.tag_filter,

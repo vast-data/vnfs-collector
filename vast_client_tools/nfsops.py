@@ -444,7 +444,7 @@ class StatsCollector(MutableEnvsMixin):
             self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattr count
             self.b.attach_kretprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
 
-    def collect_stats(self, squash_pid=False, filter_tags=None, filter_condition=None, anon_fields=None):
+    def collect_stats(self, interval, squash_pid=False, filter_tags=None, filter_condition=None, anon_fields=None):
         timestamp = pd.Timestamp.utcnow().astimezone(None).floor("s")
         logger.debug(f"######## collect sample ########")
 
@@ -452,6 +452,7 @@ class StatsCollector(MutableEnvsMixin):
         statistics = []
         for k, v in (counts.items_lookup_and_delete_batch() if self.batch_ops else counts.items()):
             output = {
+                    "TIMEDELTA": interval,
                     "TIMESTAMP":        timestamp,
                     "HOSTNAME":         self.hostname,
                     "PID":              k.tgid, # real pid is the thread-group id
