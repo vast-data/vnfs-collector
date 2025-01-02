@@ -106,6 +106,42 @@ class TestMainSuite:
                 "-d=vdb --db-endpoint=1 --vdb-access-key=1 --vdb-schema=1",
                 "the following arguments are required",
             ),
+            (
+                "-d=vdb --db-tenant=my-tenant --db-bucket=my-bucket"
+                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
+            ),
+            (
+                "-d=vdb --db-tenant=my-tenant --db-schema=my-schema"
+                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
+            ),
+            (
+                "-d=vdb --db-tenant=my-tenant --db-table=my-table "
+                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
+            ),
+            (
+                "-d=vdb --db-tenant=my-tenant --db-bucket=my-bucket --db-schema=my-schema"
+                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
+            ),
+            (
+                "-d=vdb --db-tenant=my-tenant --db-bucket=my-bucket --db-table=my-table"
+                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
+            ),
+            (
+                "-d=vdb --db-bucket=my-bucket --db-schema=my-schema --db-table=my-table"
+                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                None,
+            ),
+            # Valid case without db-tenant
+            (
+                "-d=vdb --db-tenant=my-tenant"
+                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                None,
+            ),
         ],
     )
     async def test_parsed_arguments(

@@ -149,6 +149,7 @@ vdb:
   db_bucket: <bucket>
   db_schema: <schema>
   db_table: <table>
+  db_tenant: <tenant>
 prometheus:
   prom_exporter_host: 0.0.0.0
   prom_exporter_port: 9000
@@ -162,6 +163,88 @@ Note: **screen** driver in this example is empty section:
 screen: {}
 ```
 This key means that driver is enabled and uses default options.
+
+
+### Drivers Usage Examples
+
+**Note**: The examples below are not exhaustive combinations of possible values for each driver.  
+They are brief illustrations to demonstrate basic usage. For detailed information about each driver's options, use the command:  
+
+```bash
+vnfs-collector --help
+```
+Options marked with ⚠ are mandatory for the respective driver.
+
+#### File Driver
+The file driver stores collected statistics in a local file. It provides the following configuration options:
+
+```yaml
+file:
+  samples_path: /opt/vnfs-collector/vnfs-collector.log  # Path to the log file
+  max_backups: 5                                        # Maximum number of backups to retain
+  max_size_mb: 200                                      # Maximum file size in MB before rollover
+```
+
+#### Screen Driver
+The screen driver outputs statistics directly to the console.
+
+```yaml
+screen:
+  table_format: true  # Display statistics in a tabular format
+```
+
+#### Kafka Driver
+The Kafka driver sends collected statistics to a Kafka topic.
+
+```yaml
+kafka:
+  bootstrap_servers: broker1:9093,broker2:9093  # Kafka bootstrap servers
+  topic: vnfs-collector                        # Kafka topic name
+  sasl_username: admin                         # SASL username (optional, required for SASL protocols)
+  sasl_password: password123                   # SASL password (optional, required for SASL protocols)
+  security_protocol: SASL_PLAINTEXT            # Security protocol (e.g., PLAINTEXT, SSL, SASL_PLAINTEXT) 
+```
+
+#### Prometheus Driver
+The Prometheus driver exposes statistics via an HTTP endpoint for Prometheus to scrape.
+
+```yaml
+prometheus:
+  prom_exporter_host: 0.0.0.0     # Hostname or IP address for the Prometheus exporter
+  prom_exporter_port: 9000        # Port for the Prometheus exporter
+```
+
+#### VDB Driver
+The VDB (VAST database) driver connects to a database to store statistics.
+
+Mutual Exclusivity:
+
+If db_tenant is specified, the following fields must not be used: db_bucket, db_schema, or db_table.
+This ensures consistency, as the db_tenant automatically determines the corresponding database bucket, schema, and table.
+If db_tenant is provided, do not specify db_bucket, db_schema, or db_table. Attempting to use both will result in an error.
+
+Example 1: Using db_tenant
+
+```yaml
+vdb:
+  db_endpoint: database.example.com          # Database endpoint
+  db_access_key: my-access-key               # Access key for the database
+  db_secret_key: my-secret-key               # Secret key for the database
+  db_tenant: my-tenant                       # Tenant name to auto-determine bucket, schema, and table
+```
+
+Example 2: Customizing db_bucket, db_schema, and db_table
+    
+```yaml
+vdb:
+  db_endpoint: database.example.com          # Database endpoint
+  db_access_key: my-access-key               # Access key for the database
+  db_secret_key: my-secret-key               # Secret key for the database
+  db_bucket: custom-bucket                   # Custom database bucket name
+  db_schema: custom-schema                   # Custom database schema name
+  db_table: custom-table                     # Custom database table name
+```
+
 
 ### Docker Usage
 The utility can be run in a Docker container using the provided Dockerfile.
