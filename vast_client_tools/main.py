@@ -21,6 +21,7 @@ from vast_client_tools.utils import (
     await_until_event_or_timeout,
     parse_args_options_from_namespace,
     maybe_list_parse,
+    maybe_bool_parse,
     flatten_keys,
 )
 from vast_client_tools.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTracer, logger
