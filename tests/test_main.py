@@ -103,7 +103,7 @@ class TestMainSuite:
                 "the following arguments are required",
             ),
             (
-                "-d=vdb --db-endpoint=1 --vdb-access-key=1 --vdb-schema=1",
+                "-d=vdb --db-endpoint=1 --db-access-key=1 --db-schema=1",
                 "the following arguments are required",
             ),
         ],
@@ -125,3 +125,48 @@ class TestMainSuite:
             assert expected_error in err or expected_error in error_log
         else:
             await _exec()
+
+
+
+    @pytest.mark.parametrize("from_config", [True, False])
+    @pytest.mark.parametrize(
+        "cmd, unknown_option",
+        [
+
+            ("-d=screen --ttable-format", "--ttable-format"),
+            ("-d=screen --ttable=format", "--ttable"),
+            ("-d=screen --table-fofrmat=abc", "--table-fofrmat"),
+            ("-d=file --vacuum-interval=600", "--vacuum-interval"),
+            ("-d=file --vacuum-interval 600", "--vacuum-interval"),
+            (
+                "-d=kafka --bootstrap-serverss=foobar",
+                "--bootstrap-serverss",
+            ),
+            (
+                "-d=kafka --bootstrap-servers=foobar --topic=foobar --security-protocol=PLAINTEXT "
+                "--sasl-username=1 --sasl-passwordd=1",
+                "--sasl-passwordd",
+            ),
+            (
+                "-d=vdb --db-endpoint=1 --vdb-access-key=1 --db-schema=1",
+                "--vdb-access-key",
+            ),
+        ],
+    )
+    async def test_invalid_parsed_arguments(
+        self, capfd, cli_factory, config_factory, cmd, unknown_option, from_config
+    ):
+        if from_config:
+            config_file = config_factory(cmd=cmd)
+            cmd = f"-C={config_file}"
+
+        cli_factory(cmd=cmd)
+        with patch("vast_client_tools.main.logger.error") as m_logger:
+            try:
+                await _exec()
+            except SystemExit:
+                pass
+        _, err = capfd.readouterr()
+        if from_config:
+            unknown_option = unknown_option.lstrip("-").replace("-", "_")
+        assert f"Unknown option '{unknown_option}"  in err

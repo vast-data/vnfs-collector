@@ -115,3 +115,13 @@ def maybe_list_parse(maybe_list):
     if isinstance(maybe_list, str):
         return list(map(str.strip, maybe_list.split(',')))
     return maybe_list
+
+
+def flatten_keys(d):
+    """Recursively flattens dictionary keys, including nested dictionaries."""
+    keys = []
+    for k, v in d.items():
+        keys.append(k)
+        if isinstance(v, dict):
+            keys.extend(flatten_keys(v))
+    return keys

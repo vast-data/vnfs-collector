@@ -11,6 +11,7 @@ from vast_client_tools.utils import (
     maybe_list_parse,
     await_until_event_or_timeout,
     get_val_or_raise,
+    flatten_keys,
 )
 
 
@@ -189,3 +190,32 @@ async def test_await_until_event_or_timeout_with_timeout():
     stop_event = asyncio.Event()
     canceled = await await_until_event_or_timeout(1, stop_event)
     assert canceled is False
+
+
+def test_empty_dict():
+    """Test flatten_keys with an empty dictionary."""
+    assert flatten_keys({}) == []
+
+
+def test_flat_dict():
+    """Test flatten_keys with a flat dictionary."""
+    data = {"a": 1, "b": 2, "c": 3}
+    assert set(flatten_keys(data)) == {"a", "b", "c"}
+
+
+def test_nested_dict():
+    """Test flatten_keys with a nested dictionary."""
+    data = {"a": 1, "b": {"c": 2, "d": 3}}
+    assert set(flatten_keys(data)) == {"a", "b", "c", "d"}
+
+
+def test_deeply_nested_dict():
+    """Test flatten_keys with a deeply nested dictionary."""
+    data = {"a": {"b": {"c": {"d": 1}}}}
+    assert set(flatten_keys(data)) == {"a", "b", "c", "d"}
+
+
+def test_mixed_types():
+    """Test flatten_keys with mixed value types."""
+    data = {"a": 1, "b": [1, 2, 3], "c": {"d": {"e": "value"}}}
+    assert set(flatten_keys(data)) == {"a", "b", "c", "d", "e"}
