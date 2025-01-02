@@ -238,7 +238,7 @@ async def _exec():
     bpf = BPF(text=bpf_text)
     pidEnvMap = PidEnvMap(vaccum_interval=args.vaccum)
     mountsMap = MountsMap(vaccum_interval=args.vaccum)
-    collector = StatsCollector(bpf=bpf, pid_env_map=pidEnvMap, mounts_map=mountsMap, envs=args.envs)
+    collector = StatsCollector(_args=args, bpf=bpf, pid_env_map=pidEnvMap, mounts_map=mountsMap)
     mgr = NamedExtensionManager(
         namespace=ENTRYPOINT_GROUP,
         invoke_on_load=True,
@@ -270,7 +270,7 @@ async def _exec():
     if not stop_event.is_set():
         # if no envs are given, no need to track
         if args.envs:
-            envTracer = EnvTracer(envs=args.envs, bpf=bpf, pid_env_map=pidEnvMap)
+            envTracer = EnvTracer(_args=args, bpf=bpf, pid_env_map=pidEnvMap)
             envTracer.attach()
             envTracer.start()
 
