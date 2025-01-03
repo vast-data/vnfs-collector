@@ -7,6 +7,7 @@ RUN apt-get update && \
     ca-certificates \
     curl \
     gnupg \
+    unzip \
     lsb-release \
     build-essential \
     rpm \
@@ -22,8 +23,15 @@ RUN apt-get update && \
     containerd.io \
     && rm -rf /var/lib/apt/lists/*
 
-# Verify Docker installation
-RUN docker --version
+# Install AWS CLI
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip aws
+
+# Verify installations
+RUN docker --version && \
+    aws --version
 
 # Upgrade pip and install Python packages
 RUN python3 -m pip install --upgrade pip pytest build --break-system-packages
