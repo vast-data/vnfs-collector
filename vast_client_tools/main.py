@@ -21,6 +21,7 @@ from vast_client_tools.utils import (
     await_until_event_or_timeout,
     parse_args_options_from_namespace,
     maybe_list_parse,
+    flatten_keys,
 )
 from vast_client_tools.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTracer, logger
 
@@ -30,6 +31,7 @@ BASE_PATH = Path(__file__).parents[1]
 ENTRYPOINT_GROUP = "drivers"
 ANON_FIELDS = {"COMM", "MOUNT", "PID", "UID", "TAGS", "REMOTE_PATH"}
 
+
 entry_points = metadata.entry_points()
 if sys.version_info >= (3, 10):
     # Use the select method for Python 3.10+
@@ -37,6 +39,38 @@ if sys.version_info >= (3, 10):
 else:
     # Access the entry points dictionary for earlier versions
     ENTRYPOINTS = entry_points.get(ENTRYPOINT_GROUP, [])
+
+available_drivers = sorted(set([e.name for e in ENTRYPOINTS]))
+
+
+def validate_args(conf_args=None):
+    """
+    Validate the arguments provided by the user.
+    This function checks that all CLI options specified as command line arguments
+    or in the configuration file (if the `-C` option is provided) are valid. It
+    ensures that unknown options are not used and raises an exception for any
+    invalid arguments.
+    """
+    conf_keys = []
+    if conf_args:
+        conf_keys = [ck for ck in flatten_keys(conf_args) if ck not in available_drivers]
+    cli_keys = [ck for ck in sys.argv[1:] if ck.startswith("-")]
+    all_keys = conf_keys + cli_keys
+
+    all_options = set()
+    mgr = ExtensionManager(namespace=ENTRYPOINT_GROUP)
+    all_parsers = [conf_parser] + [ext.plugin.parser for ext in mgr.extensions]
+
+    # Collect all options from all parsers
+    for parser in all_parsers:
+        for action in parser._actions:
+            all_options.update(action.option_strings)
+    available_keys = {k.replace("-", "_").strip("_") for k in all_options}
+    # Check if any unknown options are provided
+    for key in all_keys:
+        refined_key = key.lstrip("-").replace("-", "_").split("=")[0]
+        if refined_key and refined_key not in available_keys:
+            raise InvalidArgument(f"Unknown option '{key}'")
 
 
 class HelpFormatter(argparse.HelpFormatter):
@@ -87,7 +121,6 @@ class HelpFormatter(argparse.HelpFormatter):
         return f"Usage: {prog} " + " ".join(usages) + f"\n\n({required_mark} - option is required if driver is enabled )" + "\n".join(help_text) + "\n\n"
 
 
-available_drivers = sorted(set([e.name for e in ENTRYPOINTS]))
 conf_parser = argparse.ArgumentParser(formatter_class=HelpFormatter)
 conf_parser.add_argument(
     '-d', '--driver',
@@ -152,6 +185,13 @@ async def _exec():
             if cfg_opts:
                 args = parse_args_options_from_namespace(namespace=cfg_opts, parser=conf_parser)
                 args.driver = sorted(set(available_drivers).intersection(set(cfg_opts.keys())))
+
+    # Validate arguments
+    try:
+        validate_args(cfg_opts)
+    except InvalidArgument as e:
+        conf_parser.error(str(e))
+
     drivers = args.driver
     if not drivers:
         conf_parser.error("No driver specified.")
