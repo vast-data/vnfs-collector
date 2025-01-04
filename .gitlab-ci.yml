@@ -30,7 +30,7 @@ update_dockerhub:
   stage: deploy
   script: |
     set -x
-    VERSION=$(cat version.txt)-$(git rev-parse --short HEAD)
+    VERSION=$(cat version.txt).g$(git rev-parse --short HEAD)
     echo "$DOCKERHUB_PW" | docker login --username "$DOCKERHUB_USER" --password-stdin
     export IMAGE_NAME=docker.io/vastdataorg/vnfs-collector:${VERSION}
     make deb
@@ -54,7 +54,7 @@ upload_artifacts_to_s3:
         echo "Building RPM and DEB packages"
         make all
       
-        version=$(cat version.txt)-$(git rev-parse --short HEAD)
+        version=$(cat version.txt).g$(git rev-parse --short HEAD)
         rpmfile=vnfs-collector-${version}.noarch.rpm
         debfile=vnfs-collector_${version}_all.deb
 
