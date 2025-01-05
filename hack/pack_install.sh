@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+version() {
+	echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }';
+}
+
 # Redirect stderr to both a file and the console
 exec 2> >(tee -a "/opt/vnfs-collector/src/errorlog" >&2)
 
@@ -20,8 +24,16 @@ if [ -d "${VENV_PATH}" ]; then
     rm -rf "${VENV_PATH}"
 fi
 
+
+py3_version=$(python3 --version | awk {'print $2'})
+if [ $(version $py3_version) -ge $(version "3.9") ]; then
+    py3=python3
+else
+    py3=python3.9
+fi
+
 # Create a new virtual environment
-python3 -m venv "${VENV_PATH}"
+$py3 -m venv "${VENV_PATH}"
 
 # Activate the virtual environment and install the package
 source "${VENV_PATH}/bin/activate"
@@ -29,7 +41,7 @@ pip install --upgrade pip || true
 pip install --upgrade Cython || true
 pip install --upgrade setuptools || true
 pip install "${PY_WHEEL}"
-python3 -c "from vast_client_tools.link_bcc import link_bcc; link_bcc()"
+$py3 -c "from vast_client_tools.link_bcc import link_bcc; link_bcc()"
 deactivate
 
 # Remove the old symlink if it exists

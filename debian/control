@@ -7,4 +7,5 @@ Build-Depends: debhelper
 Package: vnfs-collector
 Architecture: all
 Depends: python3, python3-venv, python3-bpfcc, systemd
+X-Python3-Version: >= 3.9
 Description: ebpf based metrics collector that tracks NFS operations per process/mount with ability to route statistics to multiple sinks such as vast native DB, prometheus and more as well outputing to a local log file or stdout.

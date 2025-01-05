@@ -19,11 +19,11 @@ requires = [
     "PyYAML==6.0.1",
     "stevedore==3.5.2",
     "prometheus_client==0.17.1",
-    "vastdb==0.0.5.4",
+    "vastdb",
     "aiokafka",
     "pandas",
     "pyarrow",
-    'importlib-metadata; python_version<"3.7"',
+    'importlib-metadata; python_version>="3.9"',
     'colorama==0.4.6; sys.platform == "win32"',
 ]
 
@@ -75,5 +75,5 @@ setup(
     },
     install_requires=requires,
     extras_require=extras_require,
-    python_requires=">=3.6",
+    python_requires=">=3.9",
 )
