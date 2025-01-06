@@ -117,6 +117,11 @@ def maybe_list_parse(maybe_list):
     return maybe_list
 
 
+def maybe_bool_parse(maybe_bool):
+    return str(maybe_bool).lower() in ("true", "1", "yes")
+
+
+
 def flatten_keys(d):
     """Recursively flattens dictionary keys, including nested dictionaries."""
     keys = []

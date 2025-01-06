@@ -8,6 +8,7 @@
 
 import os
 import re
+import argparse
 
 import numpy
 import psutil
@@ -219,6 +220,21 @@ class MountInfo:
         return ""
 
 
+class MutableEnvsMixin:
+    """Mixin to provide a mutable `envs` property for managing environment variables."""
+
+    def __init__(self, _args: argparse.Namespace):
+        self._args = _args
+
+    @property
+    def envs(self):
+        return self._args.envs
+
+    @envs.setter
+    def envs(self, value):
+        self._args.envs = value
+
+
 class MountsMap:
     def __init__(self, vaccum_interval=600):
         self.map = {}
@@ -315,13 +331,13 @@ class PidEnvMap:
                 return self.pidmap[str(pid)]
             return {}
 
-class EnvTracer:
+class EnvTracer(MutableEnvsMixin):
     """
     Tracer traps pid execution and collects the existance of the tracked
     environment variables.
     """
-    def __init__(self, envs, bpf, pid_env_map):
-        self.envs = envs
+    def __init__(self, _args, bpf, pid_env_map):
+        super().__init__(_args)
         self.b = bpf
         self.pid_env_map = pid_env_map
 
@@ -347,16 +363,16 @@ class EnvTracer:
             self.pid_env_map.insert(data.pid, envs)
 
 
-class StatsCollector:
+class StatsCollector(MutableEnvsMixin):
     """
     Tracer traps pid execution and collects the existance of the tracked
     environment variables.
     """
-    def __init__(self, bpf, pid_env_map, mounts_map, envs):
+    def __init__(self, _args, bpf, pid_env_map, mounts_map):
+        super().__init__(_args)
         self.b = bpf
         self.pid_env_map = pid_env_map
         self.mounts_map = mounts_map
-        self.envs = envs
         self.hostname = os.getenv("HOSTNAME", socket.gethostname())
         # check whether hash table batch ops is supported
         try:
@@ -428,7 +444,7 @@ class StatsCollector:
             self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattr count
             self.b.attach_kretprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
 
-    def collect_stats(self, squash_pid=False, filter_tags=None, filter_condition=None, anon_fields=None):
+    def collect_stats(self, interval, squash_pid=False, filter_tags=None, filter_condition=None, anon_fields=None):
         timestamp = pd.Timestamp.utcnow().astimezone(None).floor("s")
         logger.debug(f"######## collect sample ########")
 
@@ -436,6 +452,7 @@ class StatsCollector:
         statistics = []
         for k, v in (counts.items_lookup_and_delete_batch() if self.batch_ops else counts.items()):
             output = {
+                    "TIMEDELTA": interval,
                     "TIMESTAMP":        timestamp,
                     "HOSTNAME":         self.hostname,
                     "PID":              k.tgid, # real pid is the thread-group id
