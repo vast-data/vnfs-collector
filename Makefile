@@ -1,4 +1,4 @@
-VERSION=$(shell git describe --tags --long)
+VERSION=$(shell git describe --tags --long --abbrev=12)
 SEMANTIC_VERSION=$(shell git describe --tags --abbrev=0)
 GIT_VERSION=$(shell echo ${VERSION} | cut -d'-' -f 2,3 | sed 's/-/./g')
 PY_VERSION=$(shell echo ${VERSION} | cut -d'-' -f 1,2)
