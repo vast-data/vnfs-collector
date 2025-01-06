@@ -1,4 +1,5 @@
 from pathlib import Path
+import pyarrow as pa
 
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
@@ -6,6 +7,13 @@ from vast_client_tools.main import _exec
 
 ROOT = Path(__file__).parent.resolve()
 
+mock_schema = pa.schema(
+    [
+        ("ENV_VAR_1", pa.string()),
+        ("ENV_VAR_2", pa.string()),
+        ("column_1", pa.int32()),
+    ]
+)
 
 @pytest.mark.asyncio
 @patch(
@@ -103,47 +111,48 @@ class TestMainSuite:
                 "the following arguments are required",
             ),
             (
-                "-d=vdb --db-endpoint=1 --db-access-key=1 --db-schema=1",
+                "-d=vdb --db-endpoint=http://test --db-access-key=1 --db-schema=1",
                 "the following arguments are required",
             ),
             (
                 "-d=vdb --db-tenant=my-tenant --db-bucket=my-bucket"
-                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
                 "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
             ),
             (
                 "-d=vdb --db-tenant=my-tenant --db-schema=my-schema"
-                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
                 "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
             ),
             (
                 "-d=vdb --db-tenant=my-tenant --db-table=my-table "
-                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
                 "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
             ),
             (
                 "-d=vdb --db-tenant=my-tenant --db-bucket=my-bucket --db-schema=my-schema"
-                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
                 "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
             ),
             (
                 "-d=vdb --db-tenant=my-tenant --db-bucket=my-bucket --db-table=my-table"
-                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
                 "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
             ),
             (
                 "-d=vdb --db-bucket=my-bucket --db-schema=my-schema --db-table=my-table"
-                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
                 None,
             ),
-            # Valid case without db-tenant
+    #         # Valid case without db-tenant
             (
                 "-d=vdb --db-tenant=my-tenant"
-                " --db-endpoint=test --db-access-key=test --db-secret-key=test",
+                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
                 None,
             ),
         ],
     )
+    @patch("vast_client_tools.drivers.vdb_driver.VdbDriver._get_vdb_schema", MagicMock(return_value=mock_schema))
     async def test_parsed_arguments(
         self, capfd, cli_factory, config_factory, cmd, expected_error, from_config
     ):
@@ -161,7 +170,6 @@ class TestMainSuite:
             assert expected_error in err or expected_error in error_log
         else:
             await _exec()
-
 
 
     @pytest.mark.parametrize("from_config", [True, False])
@@ -184,7 +192,7 @@ class TestMainSuite:
                 "--sasl-passwordd",
             ),
             (
-                "-d=vdb --db-endpoint=1 --vdb-access-key=1 --db-schema=1",
+                "-d=vdb --db-endpoint=http://test --vdb-access-key=1 --db-schema=1",
                 "--vdb-access-key",
             ),
         ],
