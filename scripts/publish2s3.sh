@@ -1,5 +1,5 @@
 #~/bin/bash
-version=`cat version.txt`-`git rev-parse --short HEAD`
+version=$(cat version.txt).g$(git rev-parse --short HEAD)
 
 rpmfile=vnfs-collector-${version}.noarch.rpm
 debfile=vnfs-collector_${version}_all.deb

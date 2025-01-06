@@ -34,8 +34,8 @@ deb: distdir pylib
 clean:
 	@rm -rf dist/ version.txt
 
-up:
-	@export VERSION=$(VERSION) && docker compose up
+up: deb
+	@export VERSION=${SEMANTIC_VERSION}-${GIT_VERSION} && docker compose up
 
 docker_build: deb
 	@docker build -f docker/debian.Dockerfile -t vnfs-collector --build-arg="VERSION=${SEMANTIC_VERSION}-${GIT_VERSION}" .
