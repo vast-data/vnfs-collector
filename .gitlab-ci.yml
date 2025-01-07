@@ -8,11 +8,16 @@ variables:
   DOCKER_REGISTRY: ${AWS_ACCOUNT_ID}.dkr.ecr.eu-west-1.amazonaws.com
   IMAGE_NAME: ${AWS_ACCOUNT_ID}.dkr.ecr.eu-west-1.amazonaws.com/dev/vnfs-collector:${CI_PIPELINE_ID}
 
+before_script:
+  - git fetch --unshallow
+
 
 build_vnfs_collector:
   stage: build
   script: |
     set -x
+    make versionfile
+    echo "Installing version: $(cat version.txt)"
     python3 -m pip install .[test]
     python3 -m pytest tests/
     LATEST=${DOCKER_REGISTRY}/dev/vnfs-collector:latest
