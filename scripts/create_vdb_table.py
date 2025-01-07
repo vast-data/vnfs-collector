@@ -11,10 +11,8 @@ python create_vdb_table.py \
 """
 
 import argparse
-from vastdb.api import VastdbApi
+import vastdb
 import pyarrow as pa
-from requests.exceptions import HTTPError
-
 
 arrow_schema = pa.schema(
     [
@@ -127,29 +125,22 @@ def main():
     db_table = args.db_table
     db_ssl_verify = False
 
-    # Initialize VastDB API
-    vastapi = VastdbApi(
-        host=db_endpoint,
-        access_key=db_access_key,
-        secret_key=db_secret_key,
-        secure=db_ssl_verify,
+    session = vastdb.connect(
+        access=db_access_key,
+        secret=db_secret_key,
+        endpoint=db_endpoint,
+        ssl_verify=db_ssl_verify,
     )
-    # Check if the schema exists, if not, create it
-    try:
-        vastapi.list_schemas(bucket=db_bucket, schema=db_schema)
-    except HTTPError as e:
-        if e.response.status_code == 404:
-            vastapi.create_schema(bucket=db_bucket, name=db_schema)
-        else:
-            raise
-
-    _, _, tables, *_ = vastapi.list_tables(
-        bucket=db_bucket, schema=db_schema, name_prefix=db_table, exact_match=True
-    )
-    if not tables:
-        vastapi.create_table(
-            bucket=db_bucket, schema=db_schema, name=db_table, arrow_schema=arrow_schema
-        )
+    with session.transaction() as tx:
+        bucket = tx.bucket(db_bucket)
+        schema = bucket.schema(db_schema, fail_if_missing=False)
+        if schema is None:
+            schema = bucket.create_schema(db_schema, fail_if_exists=False)
+            print(f"Schema {db_schema} created.")
+        table = schema.table(db_table, fail_if_missing=False)
+        if table is None:
+            schema.create_table(db_table, columns=arrow_schema)
+            print(f"Table {db_table} created.")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
 import argparse
 from datetime import datetime, timedelta
 
+import vastdb
+from vastdb.errors import NotFound
 import pyarrow as pa
 
 from vast_client_tools.drivers.base import DriverBase
@@ -75,40 +77,32 @@ class VdbDriver(DriverBase):
             return False
         return True
 
-    def _get_vdb_columns(self):
+    def _get_vdb_schema(self):
         """Fetch the column definitions for the configured database table."""
-        from vastdb.api import VastdbApi
-
-        vastapi = VastdbApi(host=self.db_endpoint, access_key=self.db_access_key,
-                            secret_key=self.db_secret_key, secure=self.db_ssl_verify)
-        if not vastapi.list_schemas(bucket=self.db_bucket, schema=self.db_schema):
-            raise VDBValidationError(f"Schema {self.db_schema} does not exist.")
-
-        _, _, tables, *_ = vastapi.list_tables(
-            bucket=self.db_bucket, schema=self.db_schema, name_prefix=self.db_table, exact_match=True
-        )
-        if not tables:
-            raise VDBValidationError(f"Table {self.db_table} does not exist.")
-
-        columns, *_ = vastapi.list_columns(bucket=self.db_bucket, schema=self.db_schema, table=self.db_table)
-        return columns
+        with vastdb.connect(
+            endpoint=self.db_endpoint,
+            access=self.db_access_key,
+            secret=self.db_secret_key,
+            ssl_verify=self.db_ssl_verify,
+            timeout=15,
+        ).transaction() as tx:
+            table = tx.bucket(self.db_bucket).schema(self.db_schema).table(self.db_table)
+            return table.arrow_schema
 
     def _refresh_vdb_schema(self):
         """Refresh the schema of the database table and update common environment variables if needed."""
-        columns = self._get_vdb_columns()
-        fields = []
+        self.arrow_schema = self._get_vdb_schema()
         envs = set()
         common_envs = set(self.common_args.envs or [])
-        for name, dtype, *_ in columns:
-            if name.startswith(ENV_VAR_PREFIX):
-                original_name = name[len(ENV_VAR_PREFIX):]
+        for col in self.arrow_schema:
+            if col.name.startswith(ENV_VAR_PREFIX):
+                original_name = col.name[len(ENV_VAR_PREFIX):]
                 envs.add(original_name)
-                if self.envs_from_vdb_schema and dtype != pa.string():
+                if self.envs_from_vdb_schema and col.type != pa.string():
                     raise VDBValidationError(
-                        f"Wrong type of {name!r}. "
+                        f"Wrong type of {col.name!r}. "
                         f"Only 'string' type is acceptable for ENV_ columns."
                     )
-            fields.append(pa.field(name, dtype))
 
         if self.envs_from_vdb_schema:
             added_columns = envs - common_envs
@@ -118,20 +112,15 @@ class VdbDriver(DriverBase):
             if removed_columns:
                 self.logger.info(f"ENV columns removed: " + ",".join(removed_columns))
             self.common_args.envs = sorted(envs)
-
-        self.arrow_schema = pa.schema(fields)
         self.read_db_schema_ts = datetime.now()
 
 
     async def setup(self, args=(), namespace=None):
         args = await super().setup(args, namespace)
-        if args.db_endpoint.startswith("http://"):
-            self.db_endpoint = args.db_endpoint[len("http://"):]
-        elif args.db_endpoint.startswith("https://"):
-            self.db_endpoint = args.db_endpoint[len("https://"):]
-        else:
-            self.db_endpoint = args.db_endpoint
+        if not args.db_endpoint.startswith(("http", "https")):
+            raise InvalidArgument("Database endpoint must start with 'http' or 'https'.")
 
+        self.db_endpoint = args.db_endpoint
         # Check if the user has provided a db_tenant and make sure no other db args are provided if db_tenant is used
         if args.db_tenant != self.parser.get_default("db_tenant") and (
                 args.db_bucket != self.parser.get_default("db_bucket") or
@@ -160,8 +149,6 @@ class VdbDriver(DriverBase):
         self.logger.info(f"{self} has been initialized.")
 
     async def store_sample(self, data, fail_on_error=False):
-        from vastdb.api import VastdbApi
-
         if self.should_read_envs:
             self._refresh_vdb_schema()
 
@@ -174,27 +161,22 @@ class VdbDriver(DriverBase):
             else:
                 rows[col.name] = data[col.name].to_list()
 
-        vastapi = VastdbApi(
-            host=self.db_endpoint,
-            access_key=self.db_access_key,
-            secret_key=self.db_secret_key,
-            secure=self.db_ssl_verify
+        session = vastdb.connect(
+            endpoint=self.db_endpoint,
+            access=self.db_access_key,
+            secret=self.db_secret_key,
+            ssl_verify=self.db_ssl_verify,
         )
-        try:
-            vastapi.insert(
-                bucket=self.db_bucket,
-                schema=self.db_schema,
-                table=self.db_table,
-                rows=rows
-            )
-        except ValueError as exc:
-            exc_str = str(exc)
-            if self.envs_from_vdb_schema and not fail_on_error:
-                self.logger.warning(exc_str)
-                self.read_db_schema_ts = datetime(1970, 1, 1)
-                self._refresh_vdb_schema()
-                await self.store_sample(data, fail_on_error=True)
-            else:
-                raise exc
-        finally:
-            del vastapi
+        with session.transaction() as tx:
+            table = tx.bucket(self.db_bucket).schema(self.db_schema).table(self.db_table)
+            try:
+                table.insert(rows=pa.Table.from_pydict(rows, schema=self.arrow_schema))
+            except (ValueError, NotFound) as exc:
+                if self.envs_from_vdb_schema and not fail_on_error:
+                    self.read_db_schema_ts = datetime(1970, 1, 1)
+                    self._refresh_vdb_schema()
+                    await self.store_sample(data, fail_on_error=True)
+                else:
+                    raise exc
+            finally:
+                del session

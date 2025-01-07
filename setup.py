@@ -9,6 +9,7 @@ try:
     VERSION = open(os.path.join(ROOT, "version.txt")).read().strip()
 except:
     VERSION = "0.0+local.dummy"
+assert VERSION, "Failed to determine version"
 
 # link bcc lib from dist-packages.
 subprocess.run([sys.executable, os.path.join(ROOT, PACKAGE, "link_bcc.py")])
@@ -19,11 +20,11 @@ requires = [
     "PyYAML==6.0.1",
     "stevedore==3.5.2",
     "prometheus_client==0.17.1",
-    "vastdb==0.0.5.4",
+    "vastdb",
     "aiokafka",
     "pandas",
     "pyarrow",
-    'importlib-metadata; python_version<"3.7"',
+    'importlib-metadata; python_version>="3.9"',
     'colorama==0.4.6; sys.platform == "win32"',
 ]
 
@@ -75,5 +76,5 @@ setup(
     },
     install_requires=requires,
     extras_require=extras_require,
-    python_requires=">=3.6",
+    python_requires=">=3.9",
 )
