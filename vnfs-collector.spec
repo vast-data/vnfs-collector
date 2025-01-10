@@ -62,7 +62,7 @@ if [ $1 == "0" ]; then # uninstall
 fi
 
 %changelog
-* Mon 06 Jan 2025 Sagi Grimberg <sagi@grimberg.me> - 1.2
+* Mon Jan 06 2025 Sagi Grimberg <sagi@grimberg.me> - 1.2
 - Added `--db-tenant` flag to specify the tenant for the vdb driver. Default options for `db-bucket`, `db-schema` and `db-table`
 - Support env variables from VDB schema (ORION-199045).
 - Added timedelta column to vdb schema and updated schema types
