@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # @lint-avoid-python-3-compatibility-imports
 #
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025 Vast Data Ltd.
+#
 # nfsops:  Track NFS operations by process.
 #          For Linux, uses BCC, eBPF.
 #
