@@ -22,6 +22,36 @@ log, etc).
     and management on various Linux distributions.
 
 
+### Downloading RPM/DEB package from a public endpoint
+In order to see the latest vnfs-collector version see:
+
+[https://vast-client-metrics.s3.eu-west-1.amazonaws.com/meta.json](https://vast-client-metrics.s3.eu-west-1.amazonaws.com/meta.json)
+
+You should see a simple json of the following form:
+```
+{'latest': '1.1-cf9f17a61026'}
+```
+
+For Debian based distributions download using (replace : `<meta.json['latest']>` with latest version:
+```
+URL="https://vast-client-metrics.s3.eu-west-1.amazonaws.com"
+wget $URL/vnfs-collector_<meta.json['latest']>_all.deb -P /tmp/
+```
+Then install using:
+```
+sudo apt install /tmp/vnfs-collector_<version>_all.deb
+```
+
+For Fedora based distributions download using (replace : `<meta.json['latest']>` with latest version:
+```
+URL="https://vast-client-metrics.s3.eu-west-1.amazonaws.com"
+wget $URL/vnfs-collector-<meta.json['latest']>.noarch.rpm -P /tmp/
+```
+Then install using:
+```
+sudo dnf install /tmp/vnfs-collector-<version>.noarch.rpm
+```
+
 ### Building Distribution Packages
 To simplify the process of building distribution packages, use the provided Makefile, which
 includes commands for generating DEB and RPM packages.
@@ -69,12 +99,12 @@ PATH. You can create alias `alias python3=python` before installation.
 
 - For DEB Packages:
 ```bash
-apt install ./dist/vnfs-collector_1.0.0-1_amd64.deb 
+sudo apt install ./dist/vnfs-collector_*_all.deb
 ```
 
 - For RPM Packages:
 ```bash
-dnf install ./dist/vnfs-collector-1.0.0-1.noarch.rpm
+sudo dnf install ./dist/vnfs-collector-*.noarch.rpm
 ```
 
 Both packages install a basic console utility **vnfs-collector** which will be
@@ -84,18 +114,17 @@ command line.
 vnfs-collector --help
 ```
 
-Additionally:
+## Other artifacts Locations
 - the **vnfs-collector** systemd service will be installed and enabled.
   The service configuration file can be found at `/etc/systemd/system/vnfs-collector.service`.
-- the **vnfs-collector** configuration file will be placed at
-  `/opt/vnfs-collector/nfsops.yaml`.
+- the **vnfs-collector** configuration file will be placed at `/opt/vnfs-collector/nfsops.yaml`.
   This file contains the default configuration options for the utility.
 
 systemd service can be started, stopped, and restarted using the following commands:
 ```bash
-systemctl start vnfs-collector
-systemctl stop vnfs-collector
-systemctl restart vnfs-collector
+sudo systemctl start vnfs-collector
+sudo systemctl stop vnfs-collector
+sudo systemctl restart vnfs-collector
 ```
 
 Logs can be viewed using the following command:
@@ -120,18 +149,18 @@ Using help you can check all required and optional arguments of the utility.
 At least one driver must be specified when running the utility.
 For example, to output statistics to the console, use:
 ```bash
-[sudo] vnfs-collector -d screen
+sudo vnfs-collector -d screen
 ```
 
 To output statistics to a local file, use:
 ```bash
-[sudo] vnfs-collector -d file --samples-path /path/to/logfile
+sudo vnfs-collector -d file --samples-path /path/to/logfile
 ```
 
 All available options can be provided as command-line arguments or using
 a configuration file:
 ```bash
-[sudo] vnfs-collector -C /path/to/config/file
+sudo vnfs-collector -C /path/to/config/file
 ```
 Configuration file example:
 ```yaml
@@ -181,8 +210,8 @@ The file driver stores collected statistics in a local file. It provides the fol
 ```yaml
 file:
   samples_path: /opt/vnfs-collector/vnfs-collector.log  # Path to the log file
-  max_backups: 5                                        # Maximum number of backups to retain
-  max_size_mb: 200                                      # Maximum file size in MB before rollover
+  max_backups: 5                                        # Number of backups to retain
+  max_size_mb: 200                                      # Rotation File size
 ```
 
 #### Screen Driver
@@ -199,10 +228,10 @@ The Kafka driver sends collected statistics to a Kafka topic.
 ```yaml
 kafka:
   bootstrap_servers: broker1:9093,broker2:9093  # Kafka bootstrap servers
-  topic: vnfs-collector                        # Kafka topic name
-  sasl_username: admin                         # SASL username (optional, required for SASL protocols)
-  sasl_password: password123                   # SASL password (optional, required for SASL protocols)
-  security_protocol: SASL_PLAINTEXT            # Security protocol (e.g., PLAINTEXT, SSL, SASL_PLAINTEXT) 
+  topic: vnfs-collector                       	# Kafka topic name
+  sasl_username: admin                          # SASL username (optional)
+  sasl_password: password123                    # SASL password (optional)
+  security_protocol: SASL_PLAINTEXT             # Security protocol
 ```
 
 #### Prometheus Driver
@@ -210,8 +239,8 @@ The Prometheus driver exposes statistics via an HTTP endpoint for Prometheus to 
 
 ```yaml
 prometheus:
-  prom_exporter_host: 0.0.0.0     # Hostname or IP address for the Prometheus exporter
-  prom_exporter_port: 9000        # Port for the Prometheus exporter
+  prom_exporter_host: 0.0.0.0  # Prometheus exporter Hostname or IP
+  prom_exporter_port: 9000     # Prometheus exporter Port number
 ```
 
 #### VDB Driver
@@ -227,10 +256,11 @@ Example 1: Using db_tenant
 
 ```yaml
 vdb:
-  db_endpoint: database.example.com          # Database endpoint
-  db_access_key: my-access-key               # Access key for the database
-  db_secret_key: my-secret-key               # Secret key for the database
-  db_tenant: my-tenant                       # Tenant name to auto-determine bucket, schema, and table
+  db_endpoint: database.example.com  # Database endpoint
+  db_access_key: my-access-key       # Access key for the database
+  db_secret_key: my-secret-key       # Secret key for the database
+  db_tenant: my-tenant               # Tenant name to auto-determine
+                                     # bucket, schema, and table
 ```
 
 Example 2: Customizing db_bucket, db_schema, and db_table
@@ -249,12 +279,16 @@ vdb:
 ### Docker Usage
 The utility can be run in a Docker container using the provided Dockerfile.
 This can be useful for testing and deployment in containerized environments.
-##### Prerequisites:
+
+##### Prerequisites
 - To build docker image you should have package distribution files in the `dist`
   directory.
-##### Start debian based container:
+
+##### Start debian based container
 ```bash
-docker build --build-arg="VERSION=$(cat version.txt)" -f docker/debian.Dockerfile -t vnfs-collector .
+docker build --build-arg="VERSION=$(cat version.txt)" \
+	-f docker/debian.Dockerfile -t vnfs-collector
+
 docker run \
   --privileged \
   --volume $(pwd):/opt/nfsops \
@@ -268,22 +302,20 @@ docker run \
   -t vnfs-collector \
   -C nfsops.yaml
 ```
-
-Make sure you specified correct volume bindings:
-
-| Mount                          | Description                                                                                                                                                                                                                                                                            | Required |
-|--------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| `$(pwd):/opt/nfsops`           | Binds the host working directory to the working directory of `vnfs-collector` within the Docker container. This is optional and is used if you want to pass full configuration from the host. CLI arguments can also be provided separately (e.g., `-envs "JOBID,MYENV" -interval 5`). | No       |
-| `/lib/modules:/lib/modules:ro` | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
-| `/usr/src:/usr/src:ro`         | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
-| `/sys/fs:/sys/fs:ro`           | Required for tracking active mounts.                                                                                                                                                                                                                                                   | Yes      |
-| `/sys/kernel:/sys/kernel:ro`   | Required for kernel extensions.                                                                                                                                                                                                                                                        | Yes      |
-| `/proc:/proc:rw`               | Required only if the `--envs` CLI flag is provided. This binding allows `vnfs-collector` to access environment variables per process.                                                                                                                                                  | No       |
-| `/host:/:ro`                   | Required for sys calls execution from host                                                                                                                                                                                                                                             | Yes      |
-
-
 If you want docker container to start at system boot, use `--restart always`
 or `--restart unless-stopped` option to `docker run` command.
+
+#### Container volume bindings
+
+| Mount                    | Description                                 | Required   |
+| :----------------------- | :------------------------------------------ | :--------: |
+| `$(pwd):/opt/nfsops` | Binds the host working directory to the working directory of `vnfs-collector` within the Docker container. This is optional and is used if you want to pass full configuration from the host. CLI arguments can also be provided separately (e.g., `-envs "JOBID,MYENV" -interval 5`). | No |
+| `/lib/modules:/lib/modules:r` | Required for kernel extensions. | Yes |
+| `/usr/src:/usr/src:ro` | Required for kernel extensions. | Yes |
+| `/sys/fs:/sys/fs:ro` | Required for tracking active mounts. | Yes |
+| `/sys/kernel:/sys/kernel:ro` | Required for kernel extensions. | Yes |
+| `/proc:/proc:rw` | Required only if the `--envs` CLI flag is provided. This binding allows `vnfs-collector` to access environment variables per process. | No |
+| `/host:/:ro` | Required for sys calls execution from host | Yes |
 
 
 ### VNFS Collector DaemonSet
@@ -337,7 +369,7 @@ You can watch the restart rollout progress using:
 kubectl rollout status ds/vnfs-collector
 ```
 
-##### Access prometheus exported metrics:
+##### Access prometheus exported metrics
 
 Enable vnfs-collector built-in prometheus exporter by setting the exporter *local* address **prom_exporter_host**
 and port **prom_exporter_port**.
@@ -351,6 +383,7 @@ The type of service you choose will depend on whether your Prometheus instance i
 If Prometheus is in the same cluster, you can use a [Headless service](./k8s/service-headless-prom-exporter.yaml)
 
 Complete setup can be achived by applying the following files
+
 - [vnfs-collector daemonset](./k8s/daemonset.yaml)
 - [vnfs-collector service](./k8s/service-headless-prom-exporter.yaml)
 - [prometheus configuration](./k8s/prometheus.yaml)
@@ -360,7 +393,7 @@ to get into prometheus ui execute:
  kubectl port-forward svc/prometheus-service 9090:9090
 ```
 
-and follow http://localhost:9090/
+and follow `http://localhost:9090/`
 
 
 If Prometheus is running outside the cluster, you should use a [NodePort service type](./k8s/service-external-prom-exporter.yaml)
