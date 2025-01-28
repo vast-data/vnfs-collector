@@ -278,7 +278,7 @@ async def _exec():
         logger.info("Exiting...")
         stop_event.set()
 
-    set_signal_handler(on_exit)
+    set_signal_handler(on_exit, asyncio.get_event_loop())
 
     if cfg_opts:
         setup_coros = mgr.map(lambda e: e.obj.setup(namespace=cfg_opts[e.name]))

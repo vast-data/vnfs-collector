@@ -32,9 +32,9 @@ def unix_serializer(obj):
     raise TypeError(f"Type {type(obj)} not serializable")
 
 
-def set_signal_handler(handler):
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
+def set_signal_handler(handler, loop):
+    loop.add_signal_handler(signal.SIGINT, handler)
+    loop.add_signal_handler(signal.SIGTERM, handler)
 
 
 async def await_until_event_or_timeout(timeout: int, stop_event: asyncio.Event) -> bool:
