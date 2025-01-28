@@ -227,7 +227,7 @@ async def _exec():
 
     logger.info(f"BPF version: {__version__}")
     try:
-        collector_version = BASE_PATH.joinpath("version.txt").read_text()
+        collector_version = BASE_PATH.joinpath("version.txt").read_text().strip('\n')
     except:
         collector_version = "0.0+local.dummy"
     logger.info(f"VNFS Collector<{COLORS.intense_blue(collector_version)}> initialization")
