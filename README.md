@@ -61,7 +61,7 @@ Build artifact will be located in the `dist` directory.
 
 <div style="border: 1px solid yellow; background-color: #fffadd; padding: 10px; margin: 10px 0;">
   <strong>Warning:</strong> 
-Package requires python3.6 or above installed on the target system.
+Package requires python3.9 or above installed on the target system.
 
 Additionally python executable should be presents as `python3` in the system
 PATH. You can create alias `alias python3=python` before installation.
