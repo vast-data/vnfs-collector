@@ -227,7 +227,7 @@ async def _exec():
 
     logger.info(f"BPF version: {__version__}")
     try:
-        collector_version = BASE_PATH.joinpath("version.txt").read_text()
+        collector_version = BASE_PATH.joinpath("version.txt").read_text().strip('\n')
     except:
         collector_version = "0.0+local.dummy"
     logger.info(f"VNFS Collector<{COLORS.intense_blue(collector_version)}> initialization")
@@ -278,7 +278,7 @@ async def _exec():
         logger.info("Exiting...")
         stop_event.set()
 
-    set_signal_handler(on_exit)
+    set_signal_handler(on_exit, asyncio.get_event_loop())
 
     if cfg_opts:
         setup_coros = mgr.map(lambda e: e.obj.setup(namespace=cfg_opts[e.name]))
