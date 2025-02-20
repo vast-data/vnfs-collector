@@ -1,5 +1,5 @@
-VERSION=$(shell git describe --tags --long --abbrev=12)
-SEMANTIC_VERSION=$(shell git describe --tags --abbrev=0)
+VERSION=$(shell git describe --tags --long --abbrev=12 | sed 's/^v//')
+SEMANTIC_VERSION=$(shell git describe --tags --abbrev=0 | sed 's/^v//')
 GIT_VERSION=$(shell echo ${VERSION} | cut -d'-' -f 2,3 | sed 's/-/./g')
 PY_VERSION=$(shell echo ${VERSION} | cut -d'-' -f 1,2)
 COMMIT_COUNT=$(shell echo ${VERSION} | cut -d'-' -f 2)
