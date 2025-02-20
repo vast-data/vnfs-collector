@@ -18,7 +18,7 @@ SYMLINK_PATH="/usr/local/bin/vnfs-collector"
 VERSION_FILE="/opt/vnfs-collector/src/version.txt"
 SYSTEMD="/opt/vnfs-collector/src/vnfs-collector.service"
 PYLIB_VERSION=$(cat "${VERSION_FILE}" | sed 's/-/.post/')
-PY_WHEEL="/opt/vnfs-collector/src/vast_client_tools-${PYLIB_VERSION}-py3-none-any.whl"
+PY_WHEEL="/opt/vnfs-collector/src/vnfs_collector-${PYLIB_VERSION}-py3-none-any.whl"
 
 # Ensure the virtual environment directory exists
 mkdir -p "${VENV_PATH}"
@@ -45,7 +45,7 @@ pip install --upgrade pip || true
 pip install --upgrade Cython || true
 pip install --upgrade setuptools || true
 pip install "${PY_WHEEL}"
-python3 -c "from vast_client_tools.link_bcc import link_bcc; link_bcc()"
+python3 -c "from vnfs_collector.link_bcc import link_bcc; link_bcc()"
 deactivate
 
 # Remove the old symlink if it exists

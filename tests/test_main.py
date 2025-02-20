@@ -3,7 +3,7 @@ import pyarrow as pa
 
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
-from vast_client_tools.main import _exec
+from vnfs_collector.main import _exec
 
 ROOT = Path(__file__).parent.resolve()
 
@@ -17,9 +17,9 @@ mock_schema = pa.schema(
 
 @pytest.mark.asyncio
 @patch(
-    "vast_client_tools.main.await_until_event_or_timeout", AsyncMock(return_value=True)
+    "vnfs_collector.main.await_until_event_or_timeout", AsyncMock(return_value=True)
 )
-@patch("vast_client_tools.main.StatsCollector", MagicMock())
+@patch("vnfs_collector.main.StatsCollector", MagicMock())
 class TestMainSuite:
 
     async def test_no_driver(self, capfd):
@@ -152,7 +152,7 @@ class TestMainSuite:
             ),
         ],
     )
-    @patch("vast_client_tools.drivers.vdb_driver.VdbDriver._get_vdb_schema", MagicMock(return_value=mock_schema))
+    @patch("vnfs_collector.drivers.vdb_driver.VdbDriver._get_vdb_schema", MagicMock(return_value=mock_schema))
     async def test_parsed_arguments(
         self, capfd, cli_factory, config_factory, cmd, expected_error, from_config
     ):
@@ -163,7 +163,7 @@ class TestMainSuite:
 
         cli_factory(cmd=cmd)
         if expected_error:
-            with patch("vast_client_tools.main.logger.error") as m_logger:
+            with patch("vnfs_collector.main.logger.error") as m_logger:
                 await _exec()
             _, err = capfd.readouterr()
             error_log = m_logger.call_args[0][0]
@@ -205,7 +205,7 @@ class TestMainSuite:
             cmd = f"-C={config_file}"
 
         cli_factory(cmd=cmd)
-        with patch("vast_client_tools.main.logger.error") as m_logger:
+        with patch("vnfs_collector.main.logger.error") as m_logger:
             try:
                 await _exec()
             except SystemExit:

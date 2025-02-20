@@ -3,7 +3,7 @@ import argparse
 import asyncio
 import pandas as pd
 
-from vast_client_tools.utils import (
+from vnfs_collector.utils import (
     InvalidArgument,
     parse_args_options_from_namespace,
     iso_serializer,
