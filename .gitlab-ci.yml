@@ -1,6 +1,6 @@
 stages:
   - build
-  - deploy
+  - release
 
 image: ${AWS_ACCOUNT_ID}.dkr.ecr.eu-west-1.amazonaws.com/dev/vnfs-collector:CI-2025-01-03
 
@@ -32,7 +32,7 @@ build_vnfs_collector:
 
 
 update_dockerhub:
-  stage: deploy
+  stage: release
   script: |
     set -x
     make deb
@@ -49,34 +49,29 @@ update_dockerhub:
   tags:
     - vast-dev-builder
 
-upload_artifacts_to_s3:
-    stage: deploy
-    script: |
-        set -x
-        export AWS_ACCESS_KEY_ID=$S3_AWS_ACCESS_KEY_ID
-        export AWS_SECRET_ACCESS_KEY=$S3_AWS_SECRET_ACCESS_KEY
-        
-        echo "Building RPM and DEB packages"
-        make all
 
-        version=$(cat version.txt).g$(git rev-parse --short=12 HEAD)
-        rpmfile=vnfs-collector-${version}.noarch.rpm
-        debfile=vnfs-collector_${version}_all.deb
-
-        s3_bucket="s3://vast-client-metrics"
-
-        echo "Uploading $rpmfile to $s3_bucket"
-        aws s3 cp dist/$rpmfile $s3_bucket/$rpmfile
-
-        echo "Uploading $debfile to $s3_bucket"
-        aws s3 cp dist/$debfile $s3_bucket/$debfile
-
-        meta=$(mktemp)
-        echo "{\"latest\": \"$version\"}" > $meta
-        echo "Uploading meta.json to $s3_bucket"
-        aws s3 cp $meta $s3_bucket/meta.json
-
-        rm -f $meta
-    when: manual
-    tags:
-        - vast-dev-builder
+release_vnfs_collector:
+  image:
+    name: alpine/git
+    entrypoint: [""]
+  only:
+    - tags
+  stage: release
+  before_script:
+    - git config --global user.email "$GITLAB_USER_EMAIL"
+    - git config --global user.name "$GITLAB_USER_NAME"
+  script: |
+    set -x
+    TAG=$(git describe --tags --abbrev=0)
+    TARGET_BRANCH=main
+    git remote add github https://oauth2:$GITHUB_TOKEN@github.com/vast-data/vnfs-collector.git || true    
+    git fetch github $TARGET_BRANCH
+    git checkout -B $TARGET_BRANCH FETCH_HEAD
+    
+    git commit -am "Vnfs Collector - $TAG
+    
+      (from $CI_COMMIT_SHA)"
+    
+    git push -f --tags github HEAD:$TARGET_BRANCH
+  tags:
+    - vast-dev-builder
