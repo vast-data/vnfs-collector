@@ -17,8 +17,8 @@ import yaml
 from bcc import BPF, __version__
 from stevedore.named import NamedExtensionManager, ExtensionManager
 
-from vast_client_tools.logger import COLORS
-from vast_client_tools.utils import (
+from vnfs_collector.logger import COLORS
+from vnfs_collector.utils import (
     InvalidArgument,
     set_signal_handler,
     await_until_event_or_timeout,
@@ -27,7 +27,7 @@ from vast_client_tools.utils import (
     maybe_bool_parse,
     flatten_keys,
 )
-from vast_client_tools.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTracer, logger
+from vnfs_collector.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTracer, logger
 
 urllib3.disable_warnings()
 

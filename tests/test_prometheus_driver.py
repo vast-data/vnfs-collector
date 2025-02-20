@@ -1,7 +1,7 @@
 import pytest
 import argparse
 from unittest.mock import patch, MagicMock
-from vast_client_tools.drivers import PrometheusDriver
+from vnfs_collector.drivers import PrometheusDriver
 
 
 @pytest.mark.asyncio

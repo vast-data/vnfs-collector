@@ -4,8 +4,8 @@
 import json
 import argparse
 
-from vast_client_tools.drivers.base import DriverBase
-from vast_client_tools.utils import iso_serializer
+from vnfs_collector.drivers.base import DriverBase
+from vnfs_collector.utils import iso_serializer
 
 
 class ScreenDriver(DriverBase):

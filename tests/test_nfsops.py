@@ -3,7 +3,7 @@ import datetime
 import pandas as pd
 import pytest
 from unittest.mock import patch, MagicMock
-from vast_client_tools.nfsops import (
+from vnfs_collector.nfsops import (
     group_stats,
     filter_stats,
     anonymize_stats,

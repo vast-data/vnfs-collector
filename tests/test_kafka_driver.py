@@ -2,7 +2,7 @@ import pytest
 import argparse
 import json
 from unittest.mock import AsyncMock, MagicMock
-from vast_client_tools.drivers import KafkaDriver
+from vnfs_collector.drivers import KafkaDriver
 
 
 @pytest.mark.asyncio

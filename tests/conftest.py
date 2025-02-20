@@ -22,7 +22,7 @@ spec.loader.exec_module(module)
 
 @pytest.fixture(scope="session")
 def data():
-    from vast_client_tools.nfsops import hashabledict
+    from vnfs_collector.nfsops import hashabledict
 
     with (ROOT / "data" / "data.json").open() as f:
         df = pd.DataFrame(json.load(f))
