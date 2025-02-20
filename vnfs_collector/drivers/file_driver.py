@@ -7,8 +7,8 @@ import argparse
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
-from vast_client_tools.drivers.base import DriverBase, InvalidArgument
-from vast_client_tools.utils import iso_serializer
+from vnfs_collector.drivers.base import DriverBase, InvalidArgument
+from vnfs_collector.utils import iso_serializer
 
 class FileDriver(DriverBase):
     parser = argparse.ArgumentParser(add_help=False)

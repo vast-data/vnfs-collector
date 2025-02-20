@@ -22,7 +22,7 @@ from pathlib import Path
 from bcc import BPF
 import pandas as pd
 
-from vast_client_tools.logger import get_logger, COLORS
+from vnfs_collector.logger import get_logger, COLORS
 
 logger = get_logger("nfsops", COLORS.magenta)
 

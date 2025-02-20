@@ -3,7 +3,7 @@ import os
 import sys
 import subprocess
 
-PACKAGE = "vast_client_tools"
+PACKAGE = "vnfs_collector"
 ROOT = os.path.dirname(__file__)
 try:
     VERSION = open(os.path.join(ROOT, "version.txt")).read().strip()
@@ -38,7 +38,7 @@ extras_require = {
 
 
 package_data = {
-    "vast_client_tools": [
+    "vnfs_collector": [
         "../nfsops.c",
         "../nfsops.yaml",
         "../version.txt",
@@ -46,7 +46,7 @@ package_data = {
 }
 
 setup(
-    name="vast_client_tools",
+    name="vnfs_collector",
     author="Sagi Grimberg, Volodymyr Boiko",
     author_email="sagi@grimberg.vastdata.com, volodymyr.boiko@vastdata.com",
     version=VERSION,
@@ -58,20 +58,20 @@ setup(
         "Programming Language :: Python :: 3",
         "Environment :: Console",
     ],
-    provides=["vast_client_tools"],
+    provides=["vnfs_collector"],
     packages=find_packages(exclude=["tests"]),
     include_package_data=True,
     package_data=package_data,
     entry_points={
         "console_scripts": [
-            "vnfs-collector = vast_client_tools.main:main",
+            "vnfs-collector = vnfs_collector.main:main",
         ],
         "drivers": [
-            "screen = vast_client_tools.drivers:ScreenDriver",
-            "file = vast_client_tools.drivers:FileDriver",
-            "vdb = vast_client_tools.drivers:VdbDriver",
-            "prometheus = vast_client_tools.drivers:PrometheusDriver",
-            "kafka = vast_client_tools.drivers:KafkaDriver",
+            "screen = vnfs_collector.drivers:ScreenDriver",
+            "file = vnfs_collector.drivers:FileDriver",
+            "vdb = vnfs_collector.drivers:VdbDriver",
+            "prometheus = vnfs_collector.drivers:PrometheusDriver",
+            "kafka = vnfs_collector.drivers:KafkaDriver",
         ],
     },
     install_requires=requires,

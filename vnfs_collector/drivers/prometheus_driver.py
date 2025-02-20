@@ -16,8 +16,8 @@ except:
     from prometheus_client.registry import CollectorRegistry as Collector
 from prometheus_client.core import GaugeMetricFamily
 
-from vast_client_tools.drivers.base import DriverBase
-from vast_client_tools.nfsops import STATKEYS
+from vnfs_collector.drivers.base import DriverBase
+from vnfs_collector.nfsops import STATKEYS
 
 
 class PrometheusDriver(DriverBase, Collector):

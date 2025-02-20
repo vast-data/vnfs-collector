@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 import argparse
-from vast_client_tools.drivers import VdbDriver
+from vnfs_collector.drivers import VdbDriver
 import pyarrow as pa
 
 COMMON_ARGS = dict(

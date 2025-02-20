@@ -8,8 +8,8 @@ import vastdb
 from vastdb.errors import NotFound
 import pyarrow as pa
 
-from vast_client_tools.drivers.base import DriverBase
-from vast_client_tools.utils import InvalidArgument
+from vnfs_collector.drivers.base import DriverBase
+from vnfs_collector.utils import InvalidArgument
 
 ENV_VAR_PREFIX = "ENV_"
 

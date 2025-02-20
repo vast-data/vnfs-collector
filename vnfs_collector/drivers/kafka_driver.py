@@ -6,8 +6,8 @@ import json
 import asyncio
 import argparse
 import os
-from vast_client_tools.utils import unix_serializer, maybe_list_parse
-from vast_client_tools.drivers.base import DriverBase, InvalidArgument
+from vnfs_collector.utils import unix_serializer, maybe_list_parse
+from vnfs_collector.drivers.base import DriverBase, InvalidArgument
 
 
 class KafkaDriver(DriverBase):

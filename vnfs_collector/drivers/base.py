@@ -4,8 +4,8 @@
 import abc
 import argparse
 
-from vast_client_tools.logger import get_logger, COLORS
-from vast_client_tools.utils import InvalidArgument, parse_args_options_from_namespace
+from vnfs_collector.logger import get_logger, COLORS
+from vnfs_collector.utils import InvalidArgument, parse_args_options_from_namespace
 
 
 class DriverBase(abc.ABC):
