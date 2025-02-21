@@ -1,0 +1,61 @@
+name: Build and Release Packages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-packages:
+    permissions: write-all
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+          build-essential dpkg-dev debhelper rpm
+          python3 -m pip install --upgrade pip
+          python3 -m pip install build
+
+      - name: Fetch History
+        run: git fetch --unshallow
+
+      - name: Build .deb and .rpm packages
+        run: make pkg
+
+      - name: Upload .deb and .rpm packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-packages
+          path: |
+            dist/*.deb
+            dist/*.rpm
+
+      - name: Get Latest Tag
+        run: echo "TAG_NAME=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
+
+      - name: Extract Changelog for Release
+        run: |
+          TAG="${{ env.TAG_NAME }}"
+          awk -v tag="## Version $TAG" '
+          BEGIN { found=0 }
+          $0 ~ tag { found=1; next }
+          found && /^## Version / { exit }
+          found { print }
+          ' CHANGELOG.md > release_notes.md || echo "No changelog found" > release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        with:
+          tag_name: "${{ env.TAG_NAME }}"
+          body_path: release_notes.md
+          files: |
+            dist/*.deb
+            dist/*.rpm
+          prerelease: false
+          draft: false
