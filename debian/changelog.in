@@ -1,5 +1,14 @@
 vnfs-collector (_VERSION_) unstable; urgency=low
 
+  * rename package to vnfs-collector
+  * github hosting (public repo)
+  * spdx license statements
+  * minor logging fixes
+
+ -- Sagi Grimberg <sagi@grimberg.me>  Sun, 23 Feb 2025 10:49:22 +0200
+
+vnfs-collector (1.2) unstable; urgency=low
+
   * Added `--db-tenant` flag to specify the tenant for the vdb driver. Default options for `db-bucket`, `db-schema` and `db-table`
   * Support env variables from VDB schema (ORION-199045).
   * Added timedelta column to vdb schema and updated schema types
