@@ -12,6 +12,7 @@ log, etc).
   - VDB: Vast Data native database solution.
   - Local log: Save statistics to local files for offline analysis.
   - Prometheus: Integrate with Prometheus for real-time metrics monitoring and alerting.
+  - Kafka: Stream metrics to a predefined kafka broker in a specific topic
   - Console Output: Print statistics directly to the console.
 
 - Testing and Deployment:
@@ -21,6 +22,10 @@ log, etc).
   - Improved the build process for generating DEB and RPM packages, ensuring smooth installation
     and management on various Linux distributions.
 
+
+## Releases
+- See rpm/deb released packages in [Releases](https://github.com/vast-data/vnfs-collector/releases)
+- See container images in [Dockerhub](https://hub.docker.com/r/vastdataorg/vnfs-collector/tags)
 
 ### Building Distribution Packages
 To simplify the process of building distribution packages, use the provided Makefile, which
