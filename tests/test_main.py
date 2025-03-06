@@ -115,38 +115,12 @@ class TestMainSuite:
                 "the following arguments are required",
             ),
             (
-                "-d=vdb --db-tenant=my-tenant --db-bucket=my-bucket"
-                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
-                "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
-            ),
-            (
-                "-d=vdb --db-tenant=my-tenant --db-schema=my-schema"
-                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
-                "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
-            ),
-            (
-                "-d=vdb --db-tenant=my-tenant --db-table=my-table "
-                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
-                "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
-            ),
-            (
-                "-d=vdb --db-tenant=my-tenant --db-bucket=my-bucket --db-schema=my-schema"
-                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
-                "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
-            ),
-            (
-                "-d=vdb --db-tenant=my-tenant --db-bucket=my-bucket --db-table=my-table"
-                " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
-                "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together.",
-            ),
-            (
                 "-d=vdb --db-bucket=my-bucket --db-schema=my-schema --db-table=my-table"
                 " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
                 None,
             ),
-    #         # Valid case without db-tenant
             (
-                "-d=vdb --db-tenant=my-tenant"
+                "-d=vdb --db-bucket=my-bucket"
                 " --db-endpoint=http://test --db-access-key=test --db-secret-key=test",
                 None,
             ),

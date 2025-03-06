@@ -22,22 +22,10 @@ class VdbDriver(DriverBase):
     parser.add_argument('--db-access-key', type=str, required=True, help='Database access key.')
     parser.add_argument('--db-secret-key', type=str, required=True, help='Database secret key.')
     parser.add_argument(
-        '--db-tenant',
-        type=str,
-        default="default",
-        help=(
-            'Specify the tenant name. When provided, it is combined with --db-bucket to form the actual bucket name, '
-            'e.g., "default-vast-client-metrics-bucket".\n'
-            ' Note: If --db-tenant is used, --db-bucket, --db-schema, and --db-table cannot be specified.\n'
-        )
-    )
-    parser.add_argument(
         '--db-bucket',
         type=str,
-        default="vast-client-metrics-bucket",
         help=(
-            'Specify the database bucket name. It is combined with the tenant (if provided) to form the actual bucket name.\n'
-            ' Note: If --db-tenant is specified, this argument should not be used.\n'
+            'Specify the database bucket name.\n'
         )
     )
     parser.add_argument(
@@ -46,7 +34,6 @@ class VdbDriver(DriverBase):
         default="vast_client_metrics_schema",
         help=(
             'Specify the database schema name.\n'
-            ' Note: This argument should not be used when --db-tenant is specified.\n'
         )
     )
     parser.add_argument(
@@ -55,7 +42,6 @@ class VdbDriver(DriverBase):
         default="vast_client_metrics_table",
         help=(
             'Specify the database table name.\n'
-            ' Note: This argument should not be used when --db-tenant is specified.\n'
         )
     )
     parser.add_argument('--db-ssl-verify', type=bool, default=True, help='Verify https connection.')
@@ -64,7 +50,6 @@ class VdbDriver(DriverBase):
         return (
             f"{self.__class__.__name__}"
             f"(endpoint={self.db_endpoint}, "
-            f"tenant={self.db_tenant}, "
             f"bucket={self.db_bucket}, "
             f"schema={self.db_schema}, "
             f"table={self.db_table}, "
@@ -124,27 +109,12 @@ class VdbDriver(DriverBase):
             raise InvalidArgument("Database endpoint must start with 'http' or 'https'.")
 
         self.db_endpoint = args.db_endpoint
-        # Check if the user has provided a db_tenant and make sure no other db args are provided if db_tenant is used
-        if args.db_tenant != self.parser.get_default("db_tenant") and (
-                args.db_bucket != self.parser.get_default("db_bucket") or
-                args.db_schema != self.parser.get_default("db_schema") or
-                args.db_table != self.parser.get_default("db_table")
-        ):
-            raise InvalidArgument(
-                "Cannot specify both --db-tenant and --db-bucket, --db-schema, or --db-table together."
-            )
         self.read_db_schema_ts = datetime(1970, 1, 1)
         self.vdb_schema_refresh_interval = timedelta(seconds=self.common_args.vdb_schema_refresh_interval)
         self.envs_from_vdb_schema = self.common_args.envs_from_vdb_schema
         self.db_access_key = args.db_access_key
         self.db_secret_key = args.db_secret_key
-        self.db_tenant = args.db_tenant
-
-        if args.db_bucket == self.parser.get_default("db_bucket"):
-            self.db_bucket = f"{self.db_tenant}-{args.db_bucket}"
-        else:
-            self.db_bucket = args.db_bucket
-
+        self.db_bucket = args.db_bucket
         self.db_schema = args.db_schema
         self.db_table = args.db_table
         self.db_ssl_verify = args.db_ssl_verify

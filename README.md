@@ -154,7 +154,6 @@ vdb:
   db_bucket: <bucket>
   db_schema: <schema>
   db_table: <table>
-  db_tenant: <tenant>
 prometheus:
   prom_exporter_host: 0.0.0.0
   prom_exporter_port: 9000
@@ -222,23 +221,7 @@ prometheus:
 #### VDB Driver
 The VDB (VAST database) driver connects to a database to store statistics.
 
-Mutual Exclusivity:
-
-If db_tenant is specified, the following fields must not be used: db_bucket, db_schema, or db_table.
-This ensures consistency, as the db_tenant automatically determines the corresponding database bucket, schema, and table.
-If db_tenant is provided, do not specify db_bucket, db_schema, or db_table. Attempting to use both will result in an error.
-
-Example 1: Using db_tenant
-
-```yaml
-vdb:
-  db_endpoint: database.example.com          # Database endpoint
-  db_access_key: my-access-key               # Access key for the database
-  db_secret_key: my-secret-key               # Secret key for the database
-  db_tenant: my-tenant                       # Tenant name to auto-determine bucket, schema, and table
-```
-
-Example 2: Customizing db_bucket, db_schema, and db_table
+Example: Specifying db_bucket, db_schema, and db_table
     
 ```yaml
 vdb:
@@ -246,8 +229,8 @@ vdb:
   db_access_key: my-access-key               # Access key for the database
   db_secret_key: my-secret-key               # Secret key for the database
   db_bucket: custom-bucket                   # Custom database bucket name
-  db_schema: custom-schema                   # Custom database schema name
-  db_table: custom-table                     # Custom database table name
+  db_schema: custom-schema                   # Custom database schema name (optional)
+  db_table: custom-table                     # Custom database table name (optional)
 ```
 
 
