@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Version 1.4
+* deprecate vdb argument `--db-tenant`
+* remove vdb argument `--db-bucket` default value - make it mandatory for vdb driver
+
 ## Version 1.3
 * rename package to vnfs-collector
 * github hosting (public repo)
