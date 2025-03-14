@@ -62,6 +62,9 @@ if [ $1 == "0" ]; then # uninstall
 fi
 
 %changelog
+* Fri Mar 14 2025 Sagi Grimberg <sagi@grimberg.me> - 1.4
+- deprecate vdb argument `--db-tenant`
+- remove vdb argument `--db-bucket` default value - make it mandatory for vdb driver
 * Sun Feb 23 2025 Sagi Grimberg <sagi@grimberg.me> - 1.3
 - rename package to vnfs-collector
 - github hosting (public repo)

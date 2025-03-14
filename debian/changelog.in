@@ -1,5 +1,12 @@
 vnfs-collector (_VERSION_) unstable; urgency=low
 
+  * deprecate vdb argument `--db-tenant`
+  * remove vdb argument `--db-bucket` default value - make it mandatory for vdb driver
+
+ -- Sagi Grimberg <sagi@grimberg.me>  Fri, 14 Mar 2025 21:11:22 +0200
+
+vnfs-collector (1.3) unstable; urgency=low
+
   * rename package to vnfs-collector
   * github hosting (public repo)
   * spdx license statements
