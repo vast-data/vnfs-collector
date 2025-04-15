@@ -3,7 +3,6 @@
 # - SCHEDID
 # - POD_NAME
 interval: 60
-vaccum: 600
 # screen: {}
 file:
  samples_path: /opt/vnfs-collector/vnfs-collector.log
