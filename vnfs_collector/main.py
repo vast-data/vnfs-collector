@@ -7,6 +7,7 @@ import urllib3
 import logging
 import argparse
 import asyncio
+import subprocess
 from pathlib import Path
 try:
     from importlib import metadata
@@ -302,8 +303,8 @@ async def _exec():
             envTracer.start()
 
         # probe needed modules (nfsv4 autoloads nfs)
-        os.system(f"modprobe kheaders  > {os.devnull} 2>&1")
-        os.system(f"modprobe nfsv4 > {os.devnull} 2>&1")
+        subprocess.run(["modprobe", "kheaders"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["modprobe", "nfsv4"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         while True:
             try:
