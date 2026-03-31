@@ -12,6 +12,7 @@ log, etc).
   - VDB: Vast Data native database solution.
   - Local log: Save statistics to local files for offline analysis.
   - Prometheus: Integrate with Prometheus for real-time metrics monitoring and alerting.
+  - OpenTelemetry: Push metrics to an OpenTelemetry collector via OTLP/gRPC.
   - Kafka: Stream metrics to a predefined kafka broker in a specific topic
   - Console Output: Print statistics directly to the console.
 
@@ -157,9 +158,12 @@ vdb:
 prometheus:
   prom_exporter_host: 0.0.0.0
   prom_exporter_port: 9000
+otel:
+  otel_collector_host: localhost
+  otel_collector_port: 4317
 ```
 
-**screen**, **file**, **vdb**, **kafka** and **prometheus** are the names of
+**screen**, **file**, **vdb**, **kafka**, **prometheus** and **otel** are the names of
 appropriate drivers.
 
 Note: **screen** driver in this example is empty section:
@@ -216,6 +220,16 @@ The Prometheus driver exposes statistics via an HTTP endpoint for Prometheus to 
 prometheus:
   prom_exporter_host: 0.0.0.0     # Hostname or IP address for the Prometheus exporter
   prom_exporter_port: 9000        # Port for the Prometheus exporter
+```
+
+#### OpenTelemetry Driver
+The OpenTelemetry driver pushes metrics to an OpenTelemetry collector via OTLP/gRPC protocol.
+
+```yaml
+otel:
+  otel_collector_host: localhost  # OpenTelemetry collector hostname
+  otel_collector_port: 4317       # OpenTelemetry collector gRPC port
+  otel_insecure: true             # Use insecure connection (default: true)
 ```
 
 #### VDB Driver

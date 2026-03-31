@@ -26,6 +26,9 @@ requires = [
     "pyarrow",
     'importlib-metadata; python_version>="3.9"',
     'colorama==0.4.6; sys.platform == "win32"',
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp-proto-grpc",
 ]
 
 # pip install .[test]
@@ -72,6 +75,7 @@ setup(
             "vdb = vnfs_collector.drivers:VdbDriver",
             "prometheus = vnfs_collector.drivers:PrometheusDriver",
             "kafka = vnfs_collector.drivers:KafkaDriver",
+            "otel = vnfs_collector.drivers:OtelDriver",
         ],
     },
     install_requires=requires,

@@ -6,3 +6,4 @@ from vnfs_collector.drivers.vdb_driver import VdbDriver
 from vnfs_collector.drivers.file_driver import FileDriver
 from vnfs_collector.drivers.prometheus_driver import PrometheusDriver
 from vnfs_collector.drivers.kafka_driver import KafkaDriver
+from vnfs_collector.drivers.otel_driver import OtelDriver
