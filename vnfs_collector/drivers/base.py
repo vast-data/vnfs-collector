@@ -22,7 +22,12 @@ class DriverBase(abc.ABC):
     __repr__ = __str__
 
     @abc.abstractmethod
-    async def store_sample(self, data):
+    async def store_samples(self, samples: list):
+        """Store a batch of samples.
+        
+        Args:
+            samples: List of pandas DataFrames, each representing a collection interval.
+        """
         pass
 
     async def setup(self, args=(), namespace=None):

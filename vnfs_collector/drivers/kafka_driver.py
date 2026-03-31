@@ -168,36 +168,40 @@ class KafkaDriver(DriverBase):
 
         return ssl_context
 
-    async def store_sample(self, data):
+    async def store_samples(self, samples: list):
         # Create a list to hold futures for batch sending
         futures = []
-        for _, entry in data.iterrows():
-            # Create headers from predefined columns in the format [("key", b"value")]
-            headers = [
-                ("HOSTNAME", entry.HOSTNAME.encode()),
-                ("UID", str(entry.UID).encode()),
-                ("COMM", entry.COMM.encode()),
-                ("MOUNT", entry.MOUNT.encode()),
-                ("REMOTE_PATH", entry.REMOTE_PATH.encode()),
-            ]
-            key = f"{entry.HOSTNAME}:{entry.COMM}:{entry.UID}:{entry.PID}".encode()
-            # Add environment variables to headers if provided
-            if self.common_args.envs:
-                for env in self.common_args.envs:
-                    # Retrieve the value and encode it to bytes
-                    value = entry.TAGS.get(env, '')
-                    headers.append((env, value.encode()))
-            try:
-                message = json.dumps(entry.to_dict(), default=unix_serializer).encode()
-                # Send the message and store the future
-                future = await self.producer.send(topic=self.topic, value=message, headers=headers, key=key)
-                futures.append(future)
-            except Exception as e:
-                self.logger.error(f"Error sending message: {e}")
+        total_messages = 0
+
+        for data in samples:
+            for _, entry in data.iterrows():
+                # Create headers from predefined columns in the format [("key", b"value")]
+                headers = [
+                    ("HOSTNAME", entry.HOSTNAME.encode()),
+                    ("UID", str(entry.UID).encode()),
+                    ("COMM", entry.COMM.encode()),
+                    ("MOUNT", entry.MOUNT.encode()),
+                    ("REMOTE_PATH", entry.REMOTE_PATH.encode()),
+                ]
+                key = f"{entry.HOSTNAME}:{entry.COMM}:{entry.UID}:{entry.PID}".encode()
+                # Add environment variables to headers if provided
+                if self.common_args.envs:
+                    for env in self.common_args.envs:
+                        # Retrieve the value and encode it to bytes
+                        value = entry.TAGS.get(env, '')
+                        headers.append((env, value.encode()))
+                try:
+                    message = json.dumps(entry.to_dict(), default=unix_serializer).encode()
+                    # Send the message and store the future
+                    future = await self.producer.send(topic=self.topic, value=message, headers=headers, key=key)
+                    futures.append(future)
+                    total_messages += 1
+                except Exception as e:
+                    self.logger.error(f"Error sending message: {e}")
 
         # Wait for all messages to be acknowledged
         try:
             await asyncio.gather(*futures)
-            self.logger.info(f"{len(data)} message(s) have been sent.")
+            self.logger.info(f"{total_messages} message(s) have been sent.")
         except Exception as e:
             self.logger.error(f"Error waiting for messages to be acknowledged: {e}")

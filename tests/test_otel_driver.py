@@ -14,7 +14,7 @@ async def test_otel_driver_setup():
         mock_meter = MagicMock()
         mock_metrics.get_meter.return_value = mock_meter
 
-        driver = OtelDriver(common_args=argparse.Namespace(envs=[], interval=5))
+        driver = OtelDriver(common_args=argparse.Namespace(envs=[], interval=5, sink_batch_size=1))
         await driver.setup()
 
         mock_exporter.assert_called_once_with(endpoint="localhost:4317", insecure=True)
@@ -35,14 +35,14 @@ async def test_otel_driver_setup_custom_args():
         mock_meter = MagicMock()
         mock_metrics.get_meter.return_value = mock_meter
 
-        driver = OtelDriver(common_args=argparse.Namespace(envs=[], interval=10))
+        driver = OtelDriver(common_args=argparse.Namespace(envs=[], interval=5, sink_batch_size=2))
         await driver.setup(args=[
             "--otel-collector-host", "otel.example.com",
             "--otel-collector-port", "4318",
         ])
 
         mock_exporter.assert_called_once_with(endpoint="otel.example.com:4318", insecure=True)
-        # interval is 10 seconds = 10000 milliseconds
+        # interval=5 * sink_batch_size=2 = 10 seconds = 10000 milliseconds
         mock_reader.assert_called_once()
         call_kwargs = mock_reader.call_args[1]
         assert call_kwargs["export_interval_millis"] == 10000
@@ -52,7 +52,7 @@ async def test_otel_driver_setup_custom_args():
 
 
 @pytest.mark.asyncio
-async def test_store_sample(data):
+async def test_store_sample_batch(data):
     with patch("vnfs_collector.drivers.otel_driver.OTLPMetricExporter"), \
          patch("vnfs_collector.drivers.otel_driver.PeriodicExportingMetricReader"), \
          patch("vnfs_collector.drivers.otel_driver.MeterProvider"), \
@@ -63,12 +63,14 @@ async def test_store_sample(data):
         mock_meter.create_gauge.return_value = mock_gauge
         mock_metrics.get_meter.return_value = mock_meter
 
-        driver = OtelDriver(common_args=argparse.Namespace(envs=["JOB"], interval=5))
+        driver = OtelDriver(common_args=argparse.Namespace(envs=["JOB"], interval=5, sink_batch_size=1))
         await driver.setup()
 
-        await driver.store_sample(data)
+        # Store a batch of samples
+        batch = [data, data]
+        await driver.store_samples(batch)
 
-        # Verify gauges were set for each row and each stat key
+        # Verify gauges were set for each row in each sample
         assert mock_gauge.set.call_count > 0
 
 
@@ -84,7 +86,7 @@ async def test_teardown():
         mock_meter = MagicMock()
         mock_metrics.get_meter.return_value = mock_meter
 
-        driver = OtelDriver(common_args=argparse.Namespace(envs=[], interval=5))
+        driver = OtelDriver(common_args=argparse.Namespace(envs=[], interval=5, sink_batch_size=1))
         await driver.setup()
         await driver.teardown()
 
@@ -101,11 +103,10 @@ async def test_driver_str():
         mock_meter = MagicMock()
         mock_metrics.get_meter.return_value = mock_meter
 
-        driver = OtelDriver(common_args=argparse.Namespace(envs=[], interval=5))
+        driver = OtelDriver(common_args=argparse.Namespace(envs=[], interval=5, sink_batch_size=1))
         await driver.setup()
 
         driver_str = str(driver)
         assert "OtelDriver" in driver_str
         assert "localhost" in driver_str
         assert "4317" in driver_str
-        assert "interval=5" in driver_str

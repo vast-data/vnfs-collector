@@ -20,11 +20,10 @@ class ScreenDriver(DriverBase):
         self.table_format = args.table_format
         self.logger.info(f"{self} has been initialized.")
 
-    async def store_sample(self, data):
-        if data.empty:
-            return
-        if self.table_format:
-            output = data.T.to_string(index=True, header=False)
-        else:
-            output = "\n".join(json.dumps(d.to_dict(), default=iso_serializer) for _, d in data.iterrows())
-        self.logger.info(f">>>\n{output}")
+    async def store_samples(self, samples: list):
+        for data in samples:
+            if self.table_format:
+                output = data.T.to_string(index=True, header=False)
+            else:
+                output = "\n".join(json.dumps(d.to_dict(), default=iso_serializer) for _, d in data.iterrows())
+            self.logger.info(f">>>\n{output}")

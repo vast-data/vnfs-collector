@@ -142,6 +142,7 @@ a configuration file:
 Configuration file example:
 ```yaml
 interval: 5
+sink_batch_size: 1
 vaccum: 600
 screen: {}
 file:
@@ -182,6 +183,20 @@ They are brief illustrations to demonstrate basic usage. For detailed informatio
 vnfs-collector --help
 ```
 Options marked with ⚠ are mandatory for the respective driver.
+
+#### Batching Configuration
+
+The collector supports batching samples before sending to sinks using `--sink-batch-size`:
+
+```bash
+# Collect every 5 seconds, send to sinks after 6 samples (every 30 seconds)
+vnfs-collector -d prometheus -i 5 --sink-batch-size 6
+```
+
+- **Prometheus**: Aggregates batched samples into a single data point (sums counts, bytes, durations)
+- **Other drivers** (OTEL, Kafka, VDB, File, Screen): Process each sample in the batch individually
+
+Default is `--sink-batch-size 1` (no batching, send immediately after each collection).
 
 #### File Driver
 The file driver stores collected statistics in a local file. It provides the following configuration options:

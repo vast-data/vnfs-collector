@@ -32,8 +32,7 @@ class OtelDriver(DriverBase):
         return (
             f"{self.__class__.__name__}"
             f"(otel_collector_host={self.otel_collector_host},"
-            f" otel_collector_port={self.otel_collector_port},"
-            f" interval={self.common_args.interval})"
+            f" otel_collector_port={self.otel_collector_port})"
         )
 
     async def setup(self, args=(), namespace=None):
@@ -43,7 +42,7 @@ class OtelDriver(DriverBase):
         self.otel_insecure = args.otel_insecure
 
         endpoint = f"{self.otel_collector_host}:{self.otel_collector_port}"
-        export_interval_millis = self.common_args.interval * 1000
+        export_interval_millis = self.common_args.interval * self.common_args.sink_batch_size * 1000
 
         resource = Resource.create({"service.name": "vnfs-collector"})
         self.exporter = OTLPMetricExporter(endpoint=endpoint, insecure=self.otel_insecure)
@@ -74,21 +73,22 @@ class OtelDriver(DriverBase):
             self.logger.info("Shutting down OTEL exporter.")
             self.provider.shutdown()
 
-    async def store_sample(self, data):
-        for _, entry in data.iterrows():
-            attributes = {
-                "hostname": entry.HOSTNAME,
-                "uid": str(entry.UID),
-                "comm": entry.COMM,
-                "mount": entry.MOUNT,
-                "remote_path": entry.REMOTE_PATH,
-            }
-            if self.common_args.envs:
-                for env in self.common_args.envs:
-                    try:
-                        attributes[env.lower()] = entry.TAGS[env]
-                    except:
-                        attributes[env.lower()] = ""
+    async def store_samples(self, samples: list):
+        for data in samples:
+            for _, entry in data.iterrows():
+                attributes = {
+                    "hostname": entry.HOSTNAME,
+                    "uid": str(entry.UID),
+                    "comm": entry.COMM,
+                    "mount": entry.MOUNT,
+                    "remote_path": entry.REMOTE_PATH,
+                }
+                if self.common_args.envs:
+                    for env in self.common_args.envs:
+                        try:
+                            attributes[env.lower()] = entry.TAGS[env]
+                        except:
+                            attributes[env.lower()] = ""
 
-            for stat_key, gauge in self.gauges.items():
-                gauge.set(entry[stat_key], attributes)
+                for stat_key, gauge in self.gauges.items():
+                    gauge.set(entry[stat_key], attributes)

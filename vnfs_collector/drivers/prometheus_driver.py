@@ -58,12 +58,17 @@ class PrometheusDriver(DriverBase, Collector):
             self.logger.info("Shutting down Prometheus exporter.")
             self.exporter.shutdown()
 
-    async def store_sample(self, data):
+    async def store_samples(self, samples: list):
         with self.lock:
-            if data.empty:
+            if not samples:
                 self.latest_sample = None
-            else:
-                self.latest_sample = data
+                return
+
+            # Concatenate all samples in the batch
+            combined = pd.concat(samples, ignore_index=True)
+
+            # Aggregate by MOUNT, COMM, TAGS (sum stats, group by labels)
+            self.latest_sample = group_stats(combined, ["MOUNT", "COMM", "TAGS"])
 
     def _create_gauge(self, name, help_text, labels, value):
         gauge = GaugeMetricFamily(name, help_text, labels=labels.keys())

@@ -108,7 +108,8 @@ async def test_store_sample(mock_vastdb_connect, vdb_driver, data):
         ]
     )
     await vdb_driver.setup(namespace=COMMON_ARGS)
-    await vdb_driver.store_sample(data)
+    # Pass data as a batch (list of samples)
+    await vdb_driver.store_samples([data])
     rows = insert_mock.call_args.kwargs["rows"]
     rows_dict = {
         "PID": rows["PID"].to_pandas().tolist(),
@@ -133,3 +134,45 @@ async def test_store_sample(mock_vastdb_connect, vdb_driver, data):
     mock_transaction.bucket.assert_called_once_with("test-bucket")
     mock_transaction.bucket().schema.assert_called_once_with("test-schema")
     mock_transaction.bucket().schema().table.assert_called_once_with("test-table")
+
+
+@pytest.mark.asyncio
+@patch("vastdb.connect")
+async def test_store_sample_batch(mock_vastdb_connect, vdb_driver, data):
+    # Test storing multiple samples in a batch
+    mock_session = MagicMock()
+    mock_transaction = MagicMock()
+    mock_table = MagicMock()
+
+    mock_vastdb_connect.return_value = mock_session
+    mock_session.transaction.return_value.__enter__.return_value = mock_transaction
+    mock_transaction.bucket.return_value.schema.return_value.table.return_value = (
+        mock_table
+    )
+
+    insert_mock = MagicMock()
+    mock_table.insert = insert_mock
+
+    vdb_driver.db_endpoint = "test-endpoint"
+    vdb_driver.db_access_key = "test-access-key"
+    vdb_driver.db_secret_key = "test-secret-key"
+    vdb_driver.db_ssl_verify = False
+    vdb_driver.db_bucket = "test-bucket"
+    vdb_driver.db_schema = "test-schema"
+
+    vdb_driver._refresh_vdb_schema = MagicMock()
+    vdb_driver.arrow_schema = pa.schema(
+        [
+            pa.field("PID", pa.int32()),
+            pa.field("OPEN_COUNT", pa.int32()),
+            pa.field("ENV_JOB", pa.string()),
+        ]
+    )
+    await vdb_driver.setup(namespace=COMMON_ARGS)
+
+    # Pass multiple samples in the batch
+    batch = [data, data]
+    await vdb_driver.store_samples(batch)
+
+    # Should batch all samples into a single insert
+    assert insert_mock.call_count == 1

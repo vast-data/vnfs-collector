@@ -60,6 +60,7 @@ class FileDriver(DriverBase):
         ]
         self.logger.info(f"{self} has been initialized.")
 
-    async def store_sample(self, data):
-        for _, entry in data.iterrows():
-            self.samples_logger.debug(json.dumps(entry.to_dict(), default=iso_serializer))
+    async def store_samples(self, samples: list):
+        for data in samples:
+            for _, entry in data.iterrows():
+                self.samples_logger.debug(json.dumps(entry.to_dict(), default=iso_serializer))

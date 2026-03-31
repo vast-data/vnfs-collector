@@ -14,7 +14,8 @@ async def test_kafka_driver(data):
     send = AsyncMock(return_value=AsyncMock())
     driver.producer.send = send
 
-    await driver.store_sample(data)
+    # Pass data as a batch (list of samples)
+    await driver.store_samples([data])
     assert send.await_count == len(data)
 
     for exec, (_, raw) in zip(send.await_args_list, data.iterrows()):
@@ -33,3 +34,20 @@ async def test_kafka_driver(data):
         assert (
             kwargs["key"].decode() == f"{raw.HOSTNAME}:{raw.COMM}:{raw.UID}:{raw.PID}"
         )
+
+
+@pytest.mark.asyncio
+async def test_kafka_driver_batch(data):
+    # Test with multiple samples in batch
+    driver = KafkaDriver(common_args=argparse.Namespace(envs=["JOB"]))
+    driver.producer = MagicMock()
+    driver.topic = "my-topic"
+    send = AsyncMock(return_value=AsyncMock())
+    driver.producer.send = send
+
+    # Pass multiple samples in the batch
+    batch = [data, data]
+    await driver.store_samples(batch)
+
+    # Should have sent messages for all rows in all samples
+    assert send.await_count == len(data) * 2
