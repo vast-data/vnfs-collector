@@ -330,8 +330,8 @@ kubectl rollout status ds/vnfs-collector
 Enable vnfs-collector built-in prometheus exporter by setting the exporter *local* address **prom_exporter_host**
 and port **prom_exporter_port**.
 
-In addition, the collector sampling is mandated by the *\<interval\>* argument, and prometheus metrics are buffered
-(and merged if needed) between scraping periods. In order to have correlated scrapes, set the prometheus scrape
+In addition, the collector sampling is mandated by the *\<interval\>* argument, and prometheus metrics
+are tracking the latest sample. In order to have correlated scrapes, set the prometheus scrape
 interval to match the collector *\<interval\>* argument.
 
 To expose the metrics to Prometheus when deployed on k8s, you need to create a service.

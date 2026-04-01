@@ -3,9 +3,8 @@
 
 import os
 import argparse
-import time
 from threading import Lock
-from collections import deque
+import pandas as pd
 
 os.environ['PROMETHEUS_DISABLE_CREATED_SERIES'] = "1"
 
@@ -17,7 +16,7 @@ except:
 from prometheus_client.core import GaugeMetricFamily
 
 from vnfs_collector.drivers.base import DriverBase
-from vnfs_collector.nfsops import STATKEYS
+from vnfs_collector.nfsops import STATKEYS, group_stats
 
 
 class PrometheusDriver(DriverBase, Collector):
@@ -30,18 +29,12 @@ class PrometheusDriver(DriverBase, Collector):
         "--prom-exporter-port", default=9000, type=int,
         help="Prometheus exporter port."
     )
-    parser.add_argument(
-        "--buffer-size", default=1000, type=int,
-        help="Number of samples stored locally for processing by the Prometheus exporter. "
-             "If the number of samples exceeds this value, the oldest samples will be discarded."
-    )
 
     def __str__(self):
         return (
             f"{self.__class__.__name__}"
             f"(prom_exporter_host={self.prom_exporter_host},"
-            f" prom_exporter_port={self.prom_exporter_port},"
-            f" buffer_size={self.buffer_size})"
+            f" prom_exporter_port={self.prom_exporter_port})"
         )
 
     async def setup(self, args=(), namespace=None):
@@ -49,8 +42,7 @@ class PrometheusDriver(DriverBase, Collector):
         self.lock = Lock()
         self.prom_exporter_host = args.prom_exporter_host
         self.prom_exporter_port = args.prom_exporter_port
-        self.buffer_size = args.buffer_size
-        self.local_buffer = deque(maxlen=self.buffer_size)
+        self.latest_sample = None
 
         prom.REGISTRY.unregister(prom.PROCESS_COLLECTOR)
         prom.REGISTRY.unregister(prom.PLATFORM_COLLECTOR)
@@ -67,15 +59,8 @@ class PrometheusDriver(DriverBase, Collector):
             self.exporter.shutdown()
 
     async def store_sample(self, data):
-        self.local_buffer.append(data)
-        buffer_max_size = self.local_buffer.maxlen
-        buffer_usage_percent = (len(self.local_buffer) / buffer_max_size) * 100
-        # Check if buffer usage exceeds 80%
-        if buffer_usage_percent > 80:
-            self.logger.warning(
-                f"Buffer usage is at {buffer_usage_percent:.2f}%. "
-                "Prometheus is taking samples too slowly."
-            )
+        with self.lock:
+            self.latest_sample = data
 
     def _create_gauge(self, name, help_text, labels, value):
         gauge = GaugeMetricFamily(name, help_text, labels=labels.keys())
@@ -83,27 +68,25 @@ class PrometheusDriver(DriverBase, Collector):
         return gauge
 
     def collect(self):
-        # Make sure only 1 prometheus request can be processed at time.
         with self.lock:
-            samples_count = len(self.local_buffer)
-            if samples_count == 0:
+            if self.latest_sample is None:
                 return
-            self.logger.debug(f"Found {samples_count} sample(s).")
-            while self.local_buffer:
-                data = self.local_buffer.popleft()
-                for _, entry in data.iterrows():
-                    labels_kwargs = {
-                        "HOSTNAME": entry.HOSTNAME,
-                        "UID": str(entry.UID),
-                        "COMM": entry.COMM,
-                        "MOUNT": entry.MOUNT,
-                        "REMOTE_PATH": entry.REMOTE_PATH,
-                    }
-                    if self.common_args.envs:
-                        for env in self.common_args.envs:
-                            try:
-                                labels_kwargs.update({env: entry.TAGS[env]})
-                            except:
-                                labels_kwargs.update({env: ""})
-                    for s in STATKEYS.keys():
-                        yield self._create_gauge("vnfs_" + s, "vnfs_" + STATKEYS[s], labels_kwargs, entry[s])
+            data = self.latest_sample
+
+        self.logger.debug(f"Found last sample")
+        for _, entry in data.iterrows():
+            labels_kwargs = {
+                "HOSTNAME": entry.HOSTNAME,
+                "UID": str(entry.UID),
+                "COMM": entry.COMM,
+                "MOUNT": entry.MOUNT,
+                "REMOTE_PATH": entry.REMOTE_PATH,
+            }
+            if self.common_args.envs:
+                for env in self.common_args.envs:
+                    try:
+                        labels_kwargs.update({env: entry.TAGS[env]})
+                    except:
+                        labels_kwargs.update({env: ""})
+            for s in STATKEYS.keys():
+                yield self._create_gauge("vnfs_" + s, "vnfs_" + STATKEYS[s], labels_kwargs, entry[s])
