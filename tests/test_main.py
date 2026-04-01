@@ -22,7 +22,8 @@ mock_schema = pa.schema(
 @patch("vnfs_collector.main.StatsCollector", MagicMock())
 class TestMainSuite:
 
-    async def test_no_driver(self, capfd):
+    async def test_no_driver(self, capfd, cli_factory):
+        cli_factory("")  # Clear sys.argv to simulate no arguments
         with pytest.raises(SystemExit) as e:
             await _exec()
             assert e.value.code == 2
