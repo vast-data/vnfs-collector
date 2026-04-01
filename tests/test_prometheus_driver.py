@@ -27,10 +27,31 @@ async def test_store_sample():
     await driver.setup()
 
     sample_data = MagicMock()
+    sample_data.empty = False
     await driver.store_sample(sample_data)
 
     # Check if the sample data is stored as latest
     assert driver.latest_sample == sample_data
+
+
+@pytest.mark.asyncio
+@patch("prometheus_client.start_http_server", MagicMock())
+@patch("prometheus_client.REGISTRY.unregister", MagicMock())
+async def test_store_empty_sample_clears_latest():
+    driver = PrometheusDriver(common_args=argparse.Namespace(envs=[]))
+    await driver.setup()
+
+    # First store non-empty data
+    sample_data = MagicMock()
+    sample_data.empty = False
+    await driver.store_sample(sample_data)
+    assert driver.latest_sample == sample_data
+
+    # Then store empty data - should clear latest_sample
+    empty_data = MagicMock()
+    empty_data.empty = True
+    await driver.store_sample(empty_data)
+    assert driver.latest_sample is None
 
 
 @pytest.mark.asyncio
@@ -41,7 +62,9 @@ async def test_store_sample_replaces_previous():
     await driver.setup()
 
     sample_data1 = MagicMock()
+    sample_data1.empty = False
     sample_data2 = MagicMock()
+    sample_data2.empty = False
 
     await driver.store_sample(sample_data1)
     await driver.store_sample(sample_data2)

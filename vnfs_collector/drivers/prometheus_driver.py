@@ -60,7 +60,10 @@ class PrometheusDriver(DriverBase, Collector):
 
     async def store_sample(self, data):
         with self.lock:
-            self.latest_sample = data
+            if data.empty:
+                self.latest_sample = None
+            else:
+                self.latest_sample = data
 
     def _create_gauge(self, name, help_text, labels, value):
         gauge = GaugeMetricFamily(name, help_text, labels=labels.keys())

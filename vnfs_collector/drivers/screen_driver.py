@@ -21,6 +21,8 @@ class ScreenDriver(DriverBase):
         self.logger.info(f"{self} has been initialized.")
 
     async def store_sample(self, data):
+        if data.empty:
+            return
         if self.table_format:
             output = data.T.to_string(index=True, header=False)
         else:
