@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Version 1.5
+* fixed prometheus sink driver to present the latest sample as read-only
+  and not clear it, causing misses for additional scrapes
+* added otel sink driver
+* added support for sink-batch-size to allow different intervals for stats
+  collection and sink store
+* added support for kernel >= 6.17
+* Add example prometheus/grafana dashboard for a slurm environment
+* fix infinite loop when bpf attach fails
+* fix debian pkg install after remove
+* minor code/unittests fixes
+
 ## Version 1.4
 * deprecate vdb argument `--db-tenant`
 * remove vdb argument `--db-bucket` default value - make it mandatory for vdb driver
