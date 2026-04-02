@@ -122,6 +122,9 @@ class VdbDriver(DriverBase):
         self.logger.info(f"{self} has been initialized.")
 
     async def store_sample(self, data, fail_on_error=False):
+        if data.empty:
+            return
+
         if self.should_read_envs:
             self._refresh_vdb_schema()
 

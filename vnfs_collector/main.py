@@ -331,8 +331,6 @@ async def _exec():
             filter_condition=args.tag_filter,
             anon_fields=args.anon_fields,
         )
-        if data.empty:
-            continue
         await asyncio.gather(*mgr.map_method("store_sample", data=data))
 
     await asyncio.gather(*mgr.map_method("teardown"))

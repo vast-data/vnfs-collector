@@ -16,25 +16,7 @@ async def test_prometheus_driver_setup():
         # Check if the driver was registered and logger info was called
         assert driver.prom_exporter_host == "::"
         assert driver.prom_exporter_port == 9000
-        assert driver.buffer_size == 1000
-        assert driver.local_buffer.maxlen == 1000
-
-
-@pytest.mark.asyncio
-@patch("prometheus_client.start_http_server", MagicMock())
-@patch("prometheus_client.REGISTRY.unregister", MagicMock())
-async def test_store_sample_buffer_warning():
-    driver = PrometheusDriver(common_args=argparse.Namespace(envs=[]))
-    await driver.setup()
-
-    # Add samples to buffer
-    for _ in range(800):  # Assuming the buffer size is 1000
-        await driver.store_sample(MagicMock())
-
-    # Check if the logger warning was called for buffer usage
-    with patch.object(driver.logger, "warning") as mock_warning:
-        await driver.store_sample(MagicMock())
-        mock_warning.assert_called()
+        assert driver.latest_sample is None
 
 
 @pytest.mark.asyncio
@@ -44,12 +26,70 @@ async def test_store_sample():
     driver = PrometheusDriver(common_args=argparse.Namespace(envs=[]))
     await driver.setup()
 
-    sample_data = MagicMock()  # Mock DataFrame row
+    sample_data = MagicMock()
+    sample_data.empty = False
     await driver.store_sample(sample_data)
 
-    # Check if the sample data is in the buffer
-    assert len(driver.local_buffer) == 1
-    assert driver.local_buffer[0] == sample_data
+    # Check if the sample data is stored as latest
+    assert driver.latest_sample == sample_data
+
+
+@pytest.mark.asyncio
+@patch("prometheus_client.start_http_server", MagicMock())
+@patch("prometheus_client.REGISTRY.unregister", MagicMock())
+async def test_store_empty_sample_clears_latest():
+    driver = PrometheusDriver(common_args=argparse.Namespace(envs=[]))
+    await driver.setup()
+
+    # First store non-empty data
+    sample_data = MagicMock()
+    sample_data.empty = False
+    await driver.store_sample(sample_data)
+    assert driver.latest_sample == sample_data
+
+    # Then store empty data - should clear latest_sample
+    empty_data = MagicMock()
+    empty_data.empty = True
+    await driver.store_sample(empty_data)
+    assert driver.latest_sample is None
+
+
+@pytest.mark.asyncio
+@patch("prometheus_client.start_http_server", MagicMock())
+@patch("prometheus_client.REGISTRY.unregister", MagicMock())
+async def test_store_sample_replaces_previous():
+    driver = PrometheusDriver(common_args=argparse.Namespace(envs=[]))
+    await driver.setup()
+
+    sample_data1 = MagicMock()
+    sample_data1.empty = False
+    sample_data2 = MagicMock()
+    sample_data2.empty = False
+
+    await driver.store_sample(sample_data1)
+    await driver.store_sample(sample_data2)
+
+    # Latest sample should be the second one
+    assert driver.latest_sample == sample_data2
+
+
+@pytest.mark.asyncio
+@patch("prometheus_client.start_http_server", MagicMock())
+@patch("prometheus_client.REGISTRY.unregister", MagicMock())
+async def test_collect_is_readonly(data):
+    driver = PrometheusDriver(common_args=argparse.Namespace(envs=["JOB"]))
+    await driver.setup()
+    await driver.store_sample(data)
+
+    # Collect metrics twice
+    metrics1 = list(driver.collect())
+    metrics2 = list(driver.collect())
+
+    # Both collections should return the same metrics (collect is readonly)
+    assert len(metrics1) == len(metrics2)
+    assert len(metrics1) > 0
+    # Latest sample should still be there
+    assert driver.latest_sample is not None
 
 
 @pytest.mark.asyncio
@@ -58,7 +98,7 @@ async def test_store_sample():
 async def test_collect_metrics(data):
     driver = PrometheusDriver(common_args=argparse.Namespace(envs=["JOB"]))
     await driver.setup()
-    driver.local_buffer.append(data)
+    await driver.store_sample(data)
 
     # Mock `_create_gauge`
     with patch.object(
