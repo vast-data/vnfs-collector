@@ -306,18 +306,17 @@ async def _exec():
         subprocess.run(["modprobe", "kheaders"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.run(["modprobe", "nfsv4"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        while True:
+        while not stop_event.is_set():
             try:
                 collector.attach()
+                logger.info("All good! StatsCollector has been attached.")
                 break
             except Exception as e:
                 if "Failed to attach" in str(e):
                     logger.error(f"{e}. Do you have any mounts?")
-                    await asyncio.sleep(10)
+                    await await_until_event_or_timeout(timeout=10, stop_event=stop_event)
                     continue
                 raise
-
-        logger.info("All good! StatsCollector has been attached.")
 
     while not stop_event.is_set():
         canceled = await await_until_event_or_timeout(timeout=args.interval, stop_event=stop_event)
