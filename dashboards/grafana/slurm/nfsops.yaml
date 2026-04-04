@@ -1,0 +1,8 @@
+envs:
+ - SLURM_JOB_ID
+ - VAST_QOS_POLICY
+ - SLURM_JOB_NAME
+interval: 30
+prometheus:
+ prom_exporter_host: 0.0.0.0
+ prom_exporter_port: 9000

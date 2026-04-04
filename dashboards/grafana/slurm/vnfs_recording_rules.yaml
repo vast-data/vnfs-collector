@@ -1,0 +1,815 @@
+# =============================================================================
+# VNFS Recording Rules — standalone Prometheus format
+#
+# HOW TO ACTIVATE (non-Kubernetes Prometheus):
+#   1. Copy this file into your Prometheus rules directory, e.g.:
+#        cp vnfs_recording_rules.yaml /etc/prometheus/rules/
+#   2. Reference the rules directory in prometheus.yml (if not already):
+#        rule_files:
+#          - "rules/*.yaml"
+#   3. Reload Prometheus:
+#        kill -HUP $(pidof prometheus)
+#      or via the HTTP API (if --web.enable-lifecycle is set):
+#        curl -X POST http://localhost:9090/-/reload
+#   4. Verify the rules are loaded:
+#        curl -s http://localhost:9090/api/v1/rules | \
+#          jq '.data.groups[] | select(.name | startswith("vnfs_"))'
+# =============================================================================
+
+groups:
+# -----------------------------------  DASHBOARD BIG NUMBERS  -----------------------------------
+  - name: vnfs_total
+    interval: 30s
+    rules:
+      - record: vnfs:read_iops:total
+        expr: sum (vnfs_READ_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:read_bytes:total
+        expr: sum (vnfs_READ_BYTES{job="vnfs-collector"}) / 30
+      - record: vnfs:write_iops:total
+        expr: sum (vnfs_WRITE_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:write_bytes:total
+        expr: sum (vnfs_WRITE_BYTES{job="vnfs-collector"}) / 30
+      - record: vnfs:metadata_ops:total
+        expr: sum (vnfs_OPEN_COUNT{job="vnfs-collector"}    + 
+                   vnfs_CLOSE_COUNT{job="vnfs-collector"}   + 
+                   vnfs_GETATTR_COUNT{job="vnfs-collector"} + 
+                   vnfs_SETATTR_COUNT{job="vnfs-collector"} + 
+                   vnfs_FLUSH_COUNT{job="vnfs-collector"}   + 
+                   vnfs_FSYNC_COUNT{job="vnfs-collector"}   + 
+                   vnfs_LOCK_COUNT{job="vnfs-collector"}    + 
+                   vnfs_MMAP_COUNT{job="vnfs-collector"}    + 
+                   vnfs_READDIR_COUNT{job="vnfs-collector"} + 
+                   vnfs_CREATE_COUNT{job="vnfs-collector"}  + 
+                   vnfs_LINK_COUNT{job="vnfs-collector"}    + 
+                   vnfs_UNLINK_COUNT{job="vnfs-collector"}  + 
+                   vnfs_SYMLINK_COUNT{job="vnfs-collector"} + 
+                   vnfs_LOOKUP_COUNT{job="vnfs-collector"}  + 
+                   vnfs_RENAME_COUNT{job="vnfs-collector"}  + 
+                   vnfs_ACCESS_COUNT{job="vnfs-collector"}  + 
+                   vnfs_MKDIR_COUNT{job="vnfs-collector"}   + 
+                   vnfs_RMDIR_COUNT{job="vnfs-collector"}   + 
+                   vnfs_LISTXATTR_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:total
+        expr: sum (vnfs_OPEN_ERRORS{job="vnfs-collector"}    + 
+                   vnfs_CLOSE_ERRORS{job="vnfs-collector"}   + 
+                   vnfs_READ_ERRORS{job="vnfs-collector"}    + 
+                   vnfs_WRITE_ERRORS{job="vnfs-collector"}   + 
+                   vnfs_GETATTR_ERRORS{job="vnfs-collector"} + 
+                   vnfs_SETATTR_ERRORS{job="vnfs-collector"} + 
+                   vnfs_FLUSH_ERRORS{job="vnfs-collector"}   + 
+                   vnfs_FSYNC_ERRORS{job="vnfs-collector"}   + 
+                   vnfs_LOCK_ERRORS{job="vnfs-collector"}    + 
+                   vnfs_MMAP_ERRORS{job="vnfs-collector"}    + 
+                   vnfs_READDIR_ERRORS{job="vnfs-collector"} + 
+                   vnfs_CREATE_ERRORS{job="vnfs-collector"}  + 
+                   vnfs_LINK_ERRORS{job="vnfs-collector"}    + 
+                   vnfs_UNLINK_ERRORS{job="vnfs-collector"}  + 
+                   vnfs_SYMLINK_ERRORS{job="vnfs-collector"} + 
+                   vnfs_LOOKUP_ERRORS{job="vnfs-collector"}  + 
+                   vnfs_RENAME_ERRORS{job="vnfs-collector"}  + 
+                   vnfs_ACCESS_ERRORS{job="vnfs-collector"}  + 
+                   vnfs_MKDIR_ERRORS{job="vnfs-collector"}   + 
+                   vnfs_RMDIR_ERRORS{job="vnfs-collector"}   + 
+                   vnfs_LISTXATTR_ERRORS{job="vnfs-collector"}) / 30
+
+
+# -----------------------------------  DASHBOARD BY HOSTNAME  -----------------------------------
+  - name: vnfs_by_hostname
+    interval: 30s
+    rules:
+      - record: vnfs:read_bytes:by_hostname
+        expr: sum by (HOSTNAME) (vnfs_READ_BYTES{job="vnfs-collector"}) / 30
+      - record: vnfs:write_bytes:by_hostname
+        expr: sum by (HOSTNAME) (vnfs_WRITE_BYTES{job="vnfs-collector"}) / 30
+      - record: vnfs:read_iops:by_hostname
+        expr: sum by (HOSTNAME) (vnfs_READ_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:write_iops:by_hostname
+        expr: sum by (HOSTNAME) (vnfs_WRITE_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:read_duration:by_hostname
+        expr: sum by (HOSTNAME) (vnfs_READ_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:write_duration:by_hostname
+        expr: sum by (HOSTNAME) (vnfs_WRITE_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:metadata_ops:by_hostname
+        expr: sum by (HOSTNAME) (vnfs_OPEN_COUNT{job="vnfs-collector"}    + 
+                                 vnfs_CLOSE_COUNT{job="vnfs-collector"}   + 
+                                 vnfs_GETATTR_COUNT{job="vnfs-collector"} + 
+                                 vnfs_SETATTR_COUNT{job="vnfs-collector"} + 
+                                 vnfs_FLUSH_COUNT{job="vnfs-collector"}   + 
+                                 vnfs_FSYNC_COUNT{job="vnfs-collector"}   + 
+                                 vnfs_LOCK_COUNT{job="vnfs-collector"}    + 
+                                 vnfs_MMAP_COUNT{job="vnfs-collector"}    + 
+                                 vnfs_READDIR_COUNT{job="vnfs-collector"} + 
+                                 vnfs_CREATE_COUNT{job="vnfs-collector"}  + 
+                                 vnfs_LINK_COUNT{job="vnfs-collector"}    + 
+                                 vnfs_UNLINK_COUNT{job="vnfs-collector"}  + 
+                                 vnfs_SYMLINK_COUNT{job="vnfs-collector"} + 
+                                 vnfs_LOOKUP_COUNT{job="vnfs-collector"}  + 
+                                 vnfs_RENAME_COUNT{job="vnfs-collector"}  + 
+                                 vnfs_ACCESS_COUNT{job="vnfs-collector"}  + 
+                                 vnfs_MKDIR_COUNT{job="vnfs-collector"}   + 
+                                 vnfs_RMDIR_COUNT{job="vnfs-collector"}   + 
+                                 vnfs_LISTXATTR_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:metadata_duration:by_hostname
+        expr: sum by (HOSTNAME) (vnfs_OPEN_DURATION{job="vnfs-collector"}    + 
+                                 vnfs_CLOSE_DURATION{job="vnfs-collector"}   + 
+                                 vnfs_GETATTR_DURATION{job="vnfs-collector"} + 
+                                 vnfs_SETATTR_DURATION{job="vnfs-collector"} + 
+                                 vnfs_FLUSH_DURATION{job="vnfs-collector"}   + 
+                                 vnfs_FSYNC_DURATION{job="vnfs-collector"}   + 
+                                 vnfs_LOCK_DURATION{job="vnfs-collector"}    + 
+                                 vnfs_MMAP_DURATION{job="vnfs-collector"}    + 
+                                 vnfs_READDIR_DURATION{job="vnfs-collector"} + 
+                                 vnfs_CREATE_DURATION{job="vnfs-collector"}  + 
+                                 vnfs_LINK_DURATION{job="vnfs-collector"}    + 
+                                 vnfs_UNLINK_DURATION{job="vnfs-collector"}  + 
+                                 vnfs_SYMLINK_DURATION{job="vnfs-collector"} + 
+                                 vnfs_LOOKUP_DURATION{job="vnfs-collector"}  + 
+                                 vnfs_RENAME_DURATION{job="vnfs-collector"}  + 
+                                 vnfs_ACCESS_DURATION{job="vnfs-collector"}  + 
+                                 vnfs_MKDIR_DURATION{job="vnfs-collector"}   + 
+                                 vnfs_RMDIR_DURATION{job="vnfs-collector"}   + 
+                                 vnfs_LISTXATTR_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_hostname
+        expr: sum by (HOSTNAME) (vnfs_OPEN_ERRORS{job="vnfs-collector"}    + 
+                                 vnfs_CLOSE_ERRORS{job="vnfs-collector"}   + 
+                                 vnfs_READ_ERRORS{job="vnfs-collector"}    + 
+                                 vnfs_WRITE_ERRORS{job="vnfs-collector"}   + 
+                                 vnfs_GETATTR_ERRORS{job="vnfs-collector"} + 
+                                 vnfs_SETATTR_ERRORS{job="vnfs-collector"} + 
+                                 vnfs_FLUSH_ERRORS{job="vnfs-collector"}   + 
+                                 vnfs_FSYNC_ERRORS{job="vnfs-collector"}   + 
+                                 vnfs_LOCK_ERRORS{job="vnfs-collector"}    + 
+                                 vnfs_MMAP_ERRORS{job="vnfs-collector"}    + 
+                                 vnfs_READDIR_ERRORS{job="vnfs-collector"} + 
+                                 vnfs_CREATE_ERRORS{job="vnfs-collector"}  + 
+                                 vnfs_LINK_ERRORS{job="vnfs-collector"}    + 
+                                 vnfs_UNLINK_ERRORS{job="vnfs-collector"}  + 
+                                 vnfs_SYMLINK_ERRORS{job="vnfs-collector"} + 
+                                 vnfs_LOOKUP_ERRORS{job="vnfs-collector"}  + 
+                                 vnfs_RENAME_ERRORS{job="vnfs-collector"}  + 
+                                 vnfs_ACCESS_ERRORS{job="vnfs-collector"}  + 
+                                 vnfs_MKDIR_ERRORS{job="vnfs-collector"}   + 
+                                 vnfs_RMDIR_ERRORS{job="vnfs-collector"}   + 
+                                 vnfs_LISTXATTR_ERRORS{job="vnfs-collector"}) / 30
+
+# -----------------------------------  DASHBOARD BY NFS OPS  -----------------------------------
+  - name: vnfs_by_op_type
+    interval: 30s
+    rules:
+      # ---------  THROUGHPUT by OP  ---------
+      - record: vnfs:bytes:by_op_type
+        labels:
+          op_type: read
+        expr: sum (vnfs_READ_BYTES{job="vnfs-collector"}) / 30
+      - record: vnfs:bytes:by_op_type
+        labels:
+          op_type: write
+        expr: sum (vnfs_WRITE_BYTES{job="vnfs-collector"}) / 30
+
+      # ---------  IOPS by OP  ---------
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: open
+        expr: sum (vnfs_OPEN_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: close
+        expr: sum (vnfs_CLOSE_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: read
+        expr: sum (vnfs_READ_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: write
+        expr: sum (vnfs_WRITE_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: getattr
+        expr: sum (vnfs_GETATTR_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: setattr
+        expr: sum (vnfs_SETATTR_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: flush
+        expr: sum (vnfs_FLUSH_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: fsync
+        expr: sum (vnfs_FSYNC_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: lock
+        expr: sum (vnfs_LOCK_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: mmap
+        expr: sum (vnfs_MMAP_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: readdir
+        expr: sum (vnfs_READDIR_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: create
+        expr: sum (vnfs_CREATE_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: link
+        expr: sum (vnfs_LINK_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: unlink
+        expr: sum (vnfs_UNLINK_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: symlink
+        expr: sum (vnfs_SYMLINK_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: lookup
+        expr: sum (vnfs_LOOKUP_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: rename
+        expr: sum (vnfs_RENAME_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: access
+        expr: sum (vnfs_ACCESS_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: mkdir
+        expr: sum (vnfs_MKDIR_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: rmdir
+        expr: sum (vnfs_RMDIR_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:iops:by_op_type
+        labels:
+          op_type: listxattr
+        expr: sum (vnfs_LISTXATTR_COUNT{job="vnfs-collector"}) / 30
+
+      # ---------  LATENCY by OP  ---------
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: open
+        expr: sum (vnfs_OPEN_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: close
+        expr: sum (vnfs_CLOSE_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: read
+        expr: sum (vnfs_READ_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: write
+        expr: sum (vnfs_WRITE_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: getattr
+        expr: sum (vnfs_GETATTR_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: setattr
+        expr: sum (vnfs_SETATTR_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: flush
+        expr: sum (vnfs_FLUSH_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: fsync
+        expr: sum (vnfs_FSYNC_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: lock
+        expr: sum (vnfs_LOCK_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: mmap
+        expr: sum (vnfs_MMAP_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: readdir
+        expr: sum (vnfs_READDIR_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: create
+        expr: sum (vnfs_CREATE_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: link
+        expr: sum (vnfs_LINK_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: unlink
+        expr: sum (vnfs_UNLINK_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: symlink
+        expr: sum (vnfs_SYMLINK_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: lookup
+        expr: sum (vnfs_LOOKUP_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: rename
+        expr: sum (vnfs_RENAME_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: access
+        expr: sum (vnfs_ACCESS_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: mkdir
+        expr: sum (vnfs_MKDIR_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: rmdir
+        expr: sum (vnfs_RMDIR_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:duration:by_op_type
+        labels:
+          op_type: listxattr
+        expr: sum (vnfs_LISTXATTR_DURATION{job="vnfs-collector"}) / 30
+
+      # ---------  ERRORS by OP  ---------
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: open
+        expr: sum (vnfs_OPEN_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: close
+        expr: sum (vnfs_CLOSE_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: read
+        expr: sum (vnfs_READ_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: write
+        expr: sum (vnfs_WRITE_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: getattr
+        expr: sum (vnfs_GETATTR_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: setattr
+        expr: sum (vnfs_SETATTR_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: flush
+        expr: sum (vnfs_FLUSH_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: fsync
+        expr: sum (vnfs_FSYNC_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: lock
+        expr: sum (vnfs_LOCK_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: mmap
+        expr: sum (vnfs_MMAP_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: readdir
+        expr: sum (vnfs_READDIR_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: create
+        expr: sum (vnfs_CREATE_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: link
+        expr: sum (vnfs_LINK_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: unlink
+        expr: sum (vnfs_UNLINK_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: symlink
+        expr: sum (vnfs_SYMLINK_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: lookup
+        expr: sum (vnfs_LOOKUP_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: rename
+        expr: sum (vnfs_RENAME_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: access
+        expr: sum (vnfs_ACCESS_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: mkdir
+        expr: sum (vnfs_MKDIR_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: rmdir
+        expr: sum (vnfs_RMDIR_ERRORS{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_op_type
+        labels:
+          op_type: listxattr
+        expr: sum (vnfs_LISTXATTR_ERRORS{job="vnfs-collector"}) / 30
+
+# -----------------------------------  DASHBOARD BY MOUNT  -----------------------------------
+  - name: vnfs_by_mount
+    interval: 30s
+    rules:
+      # ---------  THROUGHPUT by MOUNT  ---------
+      - record: vnfs:read_bytes:by_mount
+        expr: sum by (MOUNT) (vnfs_READ_BYTES{job="vnfs-collector"}) / 30
+      - record: vnfs:write_bytes:by_mount
+        expr: sum by (MOUNT) (vnfs_WRITE_BYTES{job="vnfs-collector"}) / 30
+      # ---------  IOPS by MOUNT  ---------
+      - record: vnfs:read_iops:by_mount
+        expr: sum by (MOUNT) (vnfs_READ_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:write_iops:by_mount
+        expr: sum by (MOUNT) (vnfs_WRITE_COUNT{job="vnfs-collector"}) / 30
+      # ---------  DURATION by MOUNT  ---------
+      - record: vnfs:read_duration:by_mount
+        expr: sum by (MOUNT) (vnfs_READ_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:write_duration:by_mount
+        expr: sum by (MOUNT) (vnfs_WRITE_DURATION{job="vnfs-collector"}) / 30
+      # ---------  MD OPS by MOUNT  ---------
+      - record: vnfs:metadata_ops:by_mount
+        expr: sum by (MOUNT) (vnfs_OPEN_COUNT{job="vnfs-collector"}    + 
+                              vnfs_CLOSE_COUNT{job="vnfs-collector"}   + 
+                              vnfs_GETATTR_COUNT{job="vnfs-collector"} + 
+                              vnfs_SETATTR_COUNT{job="vnfs-collector"} + 
+                              vnfs_FLUSH_COUNT{job="vnfs-collector"}   + 
+                              vnfs_FSYNC_COUNT{job="vnfs-collector"}   + 
+                              vnfs_LOCK_COUNT{job="vnfs-collector"}    + 
+                              vnfs_MMAP_COUNT{job="vnfs-collector"}    + 
+                              vnfs_READDIR_COUNT{job="vnfs-collector"} + 
+                              vnfs_CREATE_COUNT{job="vnfs-collector"}  + 
+                              vnfs_LINK_COUNT{job="vnfs-collector"}    + 
+                              vnfs_UNLINK_COUNT{job="vnfs-collector"}  + 
+                              vnfs_SYMLINK_COUNT{job="vnfs-collector"} + 
+                              vnfs_LOOKUP_COUNT{job="vnfs-collector"}  + 
+                              vnfs_RENAME_COUNT{job="vnfs-collector"}  + 
+                              vnfs_ACCESS_COUNT{job="vnfs-collector"}  + 
+                              vnfs_MKDIR_COUNT{job="vnfs-collector"}   + 
+                              vnfs_RMDIR_COUNT{job="vnfs-collector"}   + 
+                              vnfs_LISTXATTR_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:read_metadata_ops:by_mount
+        expr: sum by (MOUNT) (vnfs_GETATTR_COUNT{job="vnfs-collector"} + 
+                              vnfs_MMAP_COUNT{job="vnfs-collector"}    + 
+                              vnfs_READDIR_COUNT{job="vnfs-collector"} + 
+                              vnfs_LOOKUP_COUNT{job="vnfs-collector"}  + 
+                              vnfs_ACCESS_COUNT{job="vnfs-collector"}  + 
+                              vnfs_LISTXATTR_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:write_metadata_ops:by_mount
+        expr: sum by (MOUNT) (vnfs_OPEN_COUNT{job="vnfs-collector"}    + 
+                              vnfs_CLOSE_COUNT{job="vnfs-collector"}   + 
+                              vnfs_SETATTR_COUNT{job="vnfs-collector"} + 
+                              vnfs_FLUSH_COUNT{job="vnfs-collector"}   + 
+                              vnfs_FSYNC_COUNT{job="vnfs-collector"}   + 
+                              vnfs_LOCK_COUNT{job="vnfs-collector"}    + 
+                              vnfs_CREATE_COUNT{job="vnfs-collector"}  + 
+                              vnfs_LINK_COUNT{job="vnfs-collector"}    + 
+                              vnfs_UNLINK_COUNT{job="vnfs-collector"}  + 
+                              vnfs_SYMLINK_COUNT{job="vnfs-collector"} + 
+                              vnfs_RENAME_COUNT{job="vnfs-collector"}  + 
+                              vnfs_MKDIR_COUNT{job="vnfs-collector"}   + 
+                              vnfs_RMDIR_COUNT{job="vnfs-collector"}) / 30
+      # ---------  MD DURATION by MOUNT  ---------
+      - record: vnfs:metadata_duration:by_mount
+        expr: sum by (MOUNT) (vnfs_OPEN_DURATION{job="vnfs-collector"}    + 
+                              vnfs_CLOSE_DURATION{job="vnfs-collector"}   + 
+                              vnfs_GETATTR_DURATION{job="vnfs-collector"} + 
+                              vnfs_SETATTR_DURATION{job="vnfs-collector"} + 
+                              vnfs_FLUSH_DURATION{job="vnfs-collector"}   + 
+                              vnfs_FSYNC_DURATION{job="vnfs-collector"}   + 
+                              vnfs_LOCK_DURATION{job="vnfs-collector"}    + 
+                              vnfs_MMAP_DURATION{job="vnfs-collector"}    + 
+                              vnfs_READDIR_DURATION{job="vnfs-collector"} + 
+                              vnfs_CREATE_DURATION{job="vnfs-collector"}  + 
+                              vnfs_LINK_DURATION{job="vnfs-collector"}    + 
+                              vnfs_UNLINK_DURATION{job="vnfs-collector"}  + 
+                              vnfs_SYMLINK_DURATION{job="vnfs-collector"} + 
+                              vnfs_LOOKUP_DURATION{job="vnfs-collector"}  + 
+                              vnfs_RENAME_DURATION{job="vnfs-collector"}  + 
+                              vnfs_ACCESS_DURATION{job="vnfs-collector"}  + 
+                              vnfs_MKDIR_DURATION{job="vnfs-collector"}   + 
+                              vnfs_RMDIR_DURATION{job="vnfs-collector"}   + 
+                              vnfs_LISTXATTR_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:read_metadata_duration:by_mount
+        expr: sum by (MOUNT) (vnfs_GETATTR_DURATION{job="vnfs-collector"} + 
+                              vnfs_MMAP_DURATION{job="vnfs-collector"}    + 
+                              vnfs_READDIR_DURATION{job="vnfs-collector"} + 
+                              vnfs_LOOKUP_DURATION{job="vnfs-collector"}  + 
+                              vnfs_ACCESS_DURATION{job="vnfs-collector"}  + 
+                              vnfs_LISTXATTR_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:write_metadata_duration:by_mount
+        expr: sum by (MOUNT) (vnfs_OPEN_DURATION{job="vnfs-collector"}    + 
+                              vnfs_CLOSE_DURATION{job="vnfs-collector"}   + 
+                              vnfs_SETATTR_DURATION{job="vnfs-collector"} + 
+                              vnfs_FLUSH_DURATION{job="vnfs-collector"}   + 
+                              vnfs_FSYNC_DURATION{job="vnfs-collector"}   + 
+                              vnfs_LOCK_DURATION{job="vnfs-collector"}    + 
+                              vnfs_CREATE_DURATION{job="vnfs-collector"}  + 
+                              vnfs_LINK_DURATION{job="vnfs-collector"}    + 
+                              vnfs_UNLINK_DURATION{job="vnfs-collector"}  + 
+                              vnfs_SYMLINK_DURATION{job="vnfs-collector"} + 
+                              vnfs_RENAME_DURATION{job="vnfs-collector"}  + 
+                              vnfs_MKDIR_DURATION{job="vnfs-collector"}   + 
+                              vnfs_RMDIR_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:errors:by_mount
+        expr: sum by (MOUNT) (vnfs_OPEN_ERRORS{job="vnfs-collector"}    + 
+                              vnfs_CLOSE_ERRORS{job="vnfs-collector"}   + 
+                              vnfs_READ_ERRORS{job="vnfs-collector"}    + 
+                              vnfs_WRITE_ERRORS{job="vnfs-collector"}   + 
+                              vnfs_GETATTR_ERRORS{job="vnfs-collector"} + 
+                              vnfs_SETATTR_ERRORS{job="vnfs-collector"} + 
+                              vnfs_FLUSH_ERRORS{job="vnfs-collector"}   + 
+                              vnfs_FSYNC_ERRORS{job="vnfs-collector"}   + 
+                              vnfs_LOCK_ERRORS{job="vnfs-collector"}    + 
+                              vnfs_MMAP_ERRORS{job="vnfs-collector"}    + 
+                              vnfs_READDIR_ERRORS{job="vnfs-collector"} + 
+                              vnfs_CREATE_ERRORS{job="vnfs-collector"}  + 
+                              vnfs_LINK_ERRORS{job="vnfs-collector"}    + 
+                              vnfs_UNLINK_ERRORS{job="vnfs-collector"}  + 
+                              vnfs_SYMLINK_ERRORS{job="vnfs-collector"} + 
+                              vnfs_LOOKUP_ERRORS{job="vnfs-collector"}  + 
+                              vnfs_RENAME_ERRORS{job="vnfs-collector"}  + 
+                              vnfs_ACCESS_ERRORS{job="vnfs-collector"}  + 
+                              vnfs_MKDIR_ERRORS{job="vnfs-collector"}   + 
+                              vnfs_RMDIR_ERRORS{job="vnfs-collector"}   + 
+                              vnfs_LISTXATTR_ERRORS{job="vnfs-collector"}) / 30
+
+# -----------------------------------  DASHBOARD BY SLURM_JOB_ID  -----------------------------------
+  - name: vnfs_by_slurm_job_id
+    interval: 30s
+    rules:
+      # ---------  THROUGHPUT by SLURM_JOB_ID  ---------
+      - record: vnfs:read_bytes:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_READ_BYTES{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      - record: vnfs:write_bytes:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_WRITE_BYTES{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      # ---------  IOPS by SLURM_JOB_ID  ---------
+      - record: vnfs:read_iops:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_READ_COUNT{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      - record: vnfs:write_iops:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_WRITE_COUNT{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      # ---------  DURATION by SLURM_JOB_ID  ---------
+      - record: vnfs:read_duration:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_READ_DURATION{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      - record: vnfs:write_duration:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_WRITE_DURATION{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      # ---------  MD OPS by SLURM_JOB_ID  ---------
+      - record: vnfs:metadata_ops:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_OPEN_COUNT{job="vnfs-collector"} + vnfs_CLOSE_COUNT{job="vnfs-collector"} +
+              vnfs_GETATTR_COUNT{job="vnfs-collector"} + vnfs_SETATTR_COUNT{job="vnfs-collector"} +
+              vnfs_FLUSH_COUNT{job="vnfs-collector"} + vnfs_FSYNC_COUNT{job="vnfs-collector"} +
+              vnfs_LOCK_COUNT{job="vnfs-collector"} + vnfs_MMAP_COUNT{job="vnfs-collector"} +
+              vnfs_READDIR_COUNT{job="vnfs-collector"} + vnfs_CREATE_COUNT{job="vnfs-collector"} +
+              vnfs_LINK_COUNT{job="vnfs-collector"} + vnfs_UNLINK_COUNT{job="vnfs-collector"} +
+              vnfs_SYMLINK_COUNT{job="vnfs-collector"} + vnfs_LOOKUP_COUNT{job="vnfs-collector"} +
+              vnfs_RENAME_COUNT{job="vnfs-collector"} + vnfs_ACCESS_COUNT{job="vnfs-collector"} +
+              vnfs_MKDIR_COUNT{job="vnfs-collector"} + vnfs_RMDIR_COUNT{job="vnfs-collector"} +
+              vnfs_LISTXATTR_COUNT{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      - record: vnfs:read_metadata_ops:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_GETATTR_COUNT{job="vnfs-collector"} + vnfs_MMAP_COUNT{job="vnfs-collector"} +
+              vnfs_READDIR_COUNT{job="vnfs-collector"} + vnfs_LOOKUP_COUNT{job="vnfs-collector"} +
+              vnfs_ACCESS_COUNT{job="vnfs-collector"} + vnfs_LISTXATTR_COUNT{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      - record: vnfs:write_metadata_ops:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_OPEN_COUNT{job="vnfs-collector"} + vnfs_CLOSE_COUNT{job="vnfs-collector"} +
+              vnfs_SETATTR_COUNT{job="vnfs-collector"} + vnfs_FLUSH_COUNT{job="vnfs-collector"} +
+              vnfs_FSYNC_COUNT{job="vnfs-collector"} + vnfs_LOCK_COUNT{job="vnfs-collector"} +
+              vnfs_CREATE_COUNT{job="vnfs-collector"} + vnfs_LINK_COUNT{job="vnfs-collector"} +
+              vnfs_UNLINK_COUNT{job="vnfs-collector"} + vnfs_SYMLINK_COUNT{job="vnfs-collector"} +
+              vnfs_RENAME_COUNT{job="vnfs-collector"} + vnfs_MKDIR_COUNT{job="vnfs-collector"} +
+              vnfs_RMDIR_COUNT{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      # ---------  MD DURATION by SLURM_JOB_ID  ---------
+      - record: vnfs:metadata_duration:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_OPEN_DURATION{job="vnfs-collector"} + vnfs_CLOSE_DURATION{job="vnfs-collector"} +
+              vnfs_GETATTR_DURATION{job="vnfs-collector"} + vnfs_SETATTR_DURATION{job="vnfs-collector"} +
+              vnfs_FLUSH_DURATION{job="vnfs-collector"} + vnfs_FSYNC_DURATION{job="vnfs-collector"} +
+              vnfs_LOCK_DURATION{job="vnfs-collector"} + vnfs_MMAP_DURATION{job="vnfs-collector"} +
+              vnfs_READDIR_DURATION{job="vnfs-collector"} + vnfs_CREATE_DURATION{job="vnfs-collector"} +
+              vnfs_LINK_DURATION{job="vnfs-collector"} + vnfs_UNLINK_DURATION{job="vnfs-collector"} +
+              vnfs_SYMLINK_DURATION{job="vnfs-collector"} + vnfs_LOOKUP_DURATION{job="vnfs-collector"} +
+              vnfs_RENAME_DURATION{job="vnfs-collector"} + vnfs_ACCESS_DURATION{job="vnfs-collector"} +
+              vnfs_MKDIR_DURATION{job="vnfs-collector"} + vnfs_RMDIR_DURATION{job="vnfs-collector"} +
+              vnfs_LISTXATTR_DURATION{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      - record: vnfs:read_metadata_duration:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_GETATTR_DURATION{job="vnfs-collector"} + vnfs_MMAP_DURATION{job="vnfs-collector"} +
+              vnfs_READDIR_DURATION{job="vnfs-collector"} + vnfs_LOOKUP_DURATION{job="vnfs-collector"} +
+              vnfs_ACCESS_DURATION{job="vnfs-collector"} + vnfs_LISTXATTR_DURATION{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      - record: vnfs:write_metadata_duration:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_OPEN_DURATION{job="vnfs-collector"} + vnfs_CLOSE_DURATION{job="vnfs-collector"} +
+              vnfs_SETATTR_DURATION{job="vnfs-collector"} + vnfs_FLUSH_DURATION{job="vnfs-collector"} +
+              vnfs_FSYNC_DURATION{job="vnfs-collector"} + vnfs_LOCK_DURATION{job="vnfs-collector"} +
+              vnfs_CREATE_DURATION{job="vnfs-collector"} + vnfs_LINK_DURATION{job="vnfs-collector"} +
+              vnfs_UNLINK_DURATION{job="vnfs-collector"} + vnfs_SYMLINK_DURATION{job="vnfs-collector"} +
+              vnfs_RENAME_DURATION{job="vnfs-collector"} + vnfs_MKDIR_DURATION{job="vnfs-collector"} +
+              vnfs_RMDIR_DURATION{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+      - record: vnfs:errors:by_slurm_job_id
+        expr: |
+          label_replace(
+            sum by (SLURM_JOB_ID) (vnfs_OPEN_ERRORS{job="vnfs-collector"} + vnfs_CLOSE_ERRORS{job="vnfs-collector"} +
+              vnfs_READ_ERRORS{job="vnfs-collector"} + vnfs_WRITE_ERRORS{job="vnfs-collector"} +
+              vnfs_GETATTR_ERRORS{job="vnfs-collector"} + vnfs_SETATTR_ERRORS{job="vnfs-collector"} +
+              vnfs_FLUSH_ERRORS{job="vnfs-collector"} + vnfs_FSYNC_ERRORS{job="vnfs-collector"} +
+              vnfs_LOCK_ERRORS{job="vnfs-collector"} + vnfs_MMAP_ERRORS{job="vnfs-collector"} +
+              vnfs_READDIR_ERRORS{job="vnfs-collector"} + vnfs_CREATE_ERRORS{job="vnfs-collector"} +
+              vnfs_LINK_ERRORS{job="vnfs-collector"} + vnfs_UNLINK_ERRORS{job="vnfs-collector"} +
+              vnfs_SYMLINK_ERRORS{job="vnfs-collector"} + vnfs_LOOKUP_ERRORS{job="vnfs-collector"} +
+              vnfs_RENAME_ERRORS{job="vnfs-collector"} + vnfs_ACCESS_ERRORS{job="vnfs-collector"} +
+              vnfs_MKDIR_ERRORS{job="vnfs-collector"} + vnfs_RMDIR_ERRORS{job="vnfs-collector"} +
+              vnfs_LISTXATTR_ERRORS{job="vnfs-collector"}) / 30,
+            "SLURM_JOB_ID", "No-Job", "SLURM_JOB_ID", "^$"
+          )
+
+# -----------------------------------  DASHBOARD BY VAST_QOS_POLICY  -----------------------------------
+  - name: vnfs_by_vast_qos_policy
+    interval: 30s
+    rules:
+      # ---------  THROUGHPUT by VAST_QOS_POLICY  ---------
+      - record: vnfs:read_bytes:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_READ_BYTES{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      - record: vnfs:write_bytes:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_WRITE_BYTES{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      # ---------  IOPS by VAST_QOS_POLICY  ---------
+      - record: vnfs:read_iops:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_READ_COUNT{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      - record: vnfs:write_iops:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_WRITE_COUNT{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      # ---------  DURATION by VAST_QOS_POLICY  ---------
+      - record: vnfs:read_duration:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_READ_DURATION{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      - record: vnfs:write_duration:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_WRITE_DURATION{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      # ---------  MD OPS by VAST_QOS_POLICY  ---------
+      - record: vnfs:metadata_ops:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_OPEN_COUNT{job="vnfs-collector"} + vnfs_CLOSE_COUNT{job="vnfs-collector"} +
+              vnfs_GETATTR_COUNT{job="vnfs-collector"} + vnfs_SETATTR_COUNT{job="vnfs-collector"} +
+              vnfs_FLUSH_COUNT{job="vnfs-collector"} + vnfs_FSYNC_COUNT{job="vnfs-collector"} +
+              vnfs_LOCK_COUNT{job="vnfs-collector"} + vnfs_MMAP_COUNT{job="vnfs-collector"} +
+              vnfs_READDIR_COUNT{job="vnfs-collector"} + vnfs_CREATE_COUNT{job="vnfs-collector"} +
+              vnfs_LINK_COUNT{job="vnfs-collector"} + vnfs_UNLINK_COUNT{job="vnfs-collector"} +
+              vnfs_SYMLINK_COUNT{job="vnfs-collector"} + vnfs_LOOKUP_COUNT{job="vnfs-collector"} +
+              vnfs_RENAME_COUNT{job="vnfs-collector"} + vnfs_ACCESS_COUNT{job="vnfs-collector"} +
+              vnfs_MKDIR_COUNT{job="vnfs-collector"} + vnfs_RMDIR_COUNT{job="vnfs-collector"} +
+              vnfs_LISTXATTR_COUNT{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      - record: vnfs:read_metadata_ops:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_GETATTR_COUNT{job="vnfs-collector"} + vnfs_MMAP_COUNT{job="vnfs-collector"} +
+              vnfs_READDIR_COUNT{job="vnfs-collector"} + vnfs_LOOKUP_COUNT{job="vnfs-collector"} +
+              vnfs_ACCESS_COUNT{job="vnfs-collector"} + vnfs_LISTXATTR_COUNT{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      - record: vnfs:write_metadata_ops:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_OPEN_COUNT{job="vnfs-collector"} + vnfs_CLOSE_COUNT{job="vnfs-collector"} +
+              vnfs_SETATTR_COUNT{job="vnfs-collector"} + vnfs_FLUSH_COUNT{job="vnfs-collector"} +
+              vnfs_FSYNC_COUNT{job="vnfs-collector"} + vnfs_LOCK_COUNT{job="vnfs-collector"} +
+              vnfs_CREATE_COUNT{job="vnfs-collector"} + vnfs_LINK_COUNT{job="vnfs-collector"} +
+              vnfs_UNLINK_COUNT{job="vnfs-collector"} + vnfs_SYMLINK_COUNT{job="vnfs-collector"} +
+              vnfs_RENAME_COUNT{job="vnfs-collector"} + vnfs_MKDIR_COUNT{job="vnfs-collector"} +
+              vnfs_RMDIR_COUNT{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      # ---------  MD DURATION by VAST_QOS_POLICY  ---------
+      - record: vnfs:metadata_duration:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_OPEN_DURATION{job="vnfs-collector"} + vnfs_CLOSE_DURATION{job="vnfs-collector"} +
+              vnfs_GETATTR_DURATION{job="vnfs-collector"} + vnfs_SETATTR_DURATION{job="vnfs-collector"} +
+              vnfs_FLUSH_DURATION{job="vnfs-collector"} + vnfs_FSYNC_DURATION{job="vnfs-collector"} +
+              vnfs_LOCK_DURATION{job="vnfs-collector"} + vnfs_MMAP_DURATION{job="vnfs-collector"} +
+              vnfs_READDIR_DURATION{job="vnfs-collector"} + vnfs_CREATE_DURATION{job="vnfs-collector"} +
+              vnfs_LINK_DURATION{job="vnfs-collector"} + vnfs_UNLINK_DURATION{job="vnfs-collector"} +
+              vnfs_SYMLINK_DURATION{job="vnfs-collector"} + vnfs_LOOKUP_DURATION{job="vnfs-collector"} +
+              vnfs_RENAME_DURATION{job="vnfs-collector"} + vnfs_ACCESS_DURATION{job="vnfs-collector"} +
+              vnfs_MKDIR_DURATION{job="vnfs-collector"} + vnfs_RMDIR_DURATION{job="vnfs-collector"} +
+              vnfs_LISTXATTR_DURATION{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      - record: vnfs:read_metadata_duration:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_GETATTR_DURATION{job="vnfs-collector"} + vnfs_MMAP_DURATION{job="vnfs-collector"} +
+              vnfs_READDIR_DURATION{job="vnfs-collector"} + vnfs_LOOKUP_DURATION{job="vnfs-collector"} +
+              vnfs_ACCESS_DURATION{job="vnfs-collector"} + vnfs_LISTXATTR_DURATION{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      - record: vnfs:write_metadata_duration:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_OPEN_DURATION{job="vnfs-collector"} + vnfs_CLOSE_DURATION{job="vnfs-collector"} +
+              vnfs_SETATTR_DURATION{job="vnfs-collector"} + vnfs_FLUSH_DURATION{job="vnfs-collector"} +
+              vnfs_FSYNC_DURATION{job="vnfs-collector"} + vnfs_LOCK_DURATION{job="vnfs-collector"} +
+              vnfs_CREATE_DURATION{job="vnfs-collector"} + vnfs_LINK_DURATION{job="vnfs-collector"} +
+              vnfs_UNLINK_DURATION{job="vnfs-collector"} + vnfs_SYMLINK_DURATION{job="vnfs-collector"} +
+              vnfs_RENAME_DURATION{job="vnfs-collector"} + vnfs_MKDIR_DURATION{job="vnfs-collector"} +
+              vnfs_RMDIR_DURATION{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
+      - record: vnfs:errors:by_vast_qos_policy
+        expr: |
+          label_replace(
+            sum by (VAST_QOS_POLICY) (vnfs_OPEN_ERRORS{job="vnfs-collector"} + vnfs_CLOSE_ERRORS{job="vnfs-collector"} +
+              vnfs_READ_ERRORS{job="vnfs-collector"} + vnfs_WRITE_ERRORS{job="vnfs-collector"} +
+              vnfs_GETATTR_ERRORS{job="vnfs-collector"} + vnfs_SETATTR_ERRORS{job="vnfs-collector"} +
+              vnfs_FLUSH_ERRORS{job="vnfs-collector"} + vnfs_FSYNC_ERRORS{job="vnfs-collector"} +
+              vnfs_LOCK_ERRORS{job="vnfs-collector"} + vnfs_MMAP_ERRORS{job="vnfs-collector"} +
+              vnfs_READDIR_ERRORS{job="vnfs-collector"} + vnfs_CREATE_ERRORS{job="vnfs-collector"} +
+              vnfs_LINK_ERRORS{job="vnfs-collector"} + vnfs_UNLINK_ERRORS{job="vnfs-collector"} +
+              vnfs_SYMLINK_ERRORS{job="vnfs-collector"} + vnfs_LOOKUP_ERRORS{job="vnfs-collector"} +
+              vnfs_RENAME_ERRORS{job="vnfs-collector"} + vnfs_ACCESS_ERRORS{job="vnfs-collector"} +
+              vnfs_MKDIR_ERRORS{job="vnfs-collector"} + vnfs_RMDIR_ERRORS{job="vnfs-collector"} +
+              vnfs_LISTXATTR_ERRORS{job="vnfs-collector"}) / 30,
+            "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
+          )
