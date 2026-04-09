@@ -1,15 +1,8 @@
 #!/bin/bash
 set -e
 
-if [ $1 == "remove" ]; then
-	SERVICE_NAME="vnfs-collector"
-	# Stop the systemd service if it's running
-	if systemctl is-active --quiet "${SERVICE_NAME}"; then
-	    systemctl stop "${SERVICE_NAME}"
-	fi
+#DEBHELPER#
 
-	# Disable the systemd service
-	systemctl disable "${SERVICE_NAME}" 2>/dev/null || true
-
+if [ "$1" = "remove" ]; then
 	/opt/vnfs-collector/src/hack/pack_uninstall.sh
 fi
