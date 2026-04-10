@@ -139,7 +139,12 @@ conf_parser.add_argument(
 )
 conf_parser.add_argument(
     "-i", "--interval", default=5, type=int,
-    help="Output interval, in seconds."
+    help="Collection interval, in seconds. How often to read stats from eBPF."
+)
+conf_parser.add_argument(
+    "--sink-batch-size", default=1, type=int,
+    help="Number of samples to batch before sending to sinks. "
+         "Effective sink interval = interval * sink_batch_size. Defaults to 1 (no batching)."
 )
 conf_parser.add_argument(
     "-v", "--vaccum", default=600, type=int,
@@ -214,6 +219,10 @@ async def _exec():
     if not drivers:
         conf_parser.error("No driver specified.")
 
+    # Validate sink_batch_size
+    if args.sink_batch_size < 1:
+        conf_parser.error("--sink-batch-size must be >= 1.")
+
     # Validate mutual dependencies
     if args.tag_filter and not args.envs:
         conf_parser.error("--tag-filter requires --envs to be specified.")
@@ -235,6 +244,7 @@ async def _exec():
     display_options = [
         ("drivers", drivers),
         ("interval", args.interval),
+        ("sink-batch-size", args.sink_batch_size),
         ("vaccum", args.vaccum),
         ("envs", args.envs),
         ("ebpf", args.ebpf),
@@ -318,6 +328,9 @@ async def _exec():
                     continue
                 raise
 
+    samples_batch = []
+    samples_collected = 0
+
     while not stop_event.is_set():
         canceled = await await_until_event_or_timeout(timeout=args.interval, stop_event=stop_event)
         if canceled:
@@ -330,7 +343,18 @@ async def _exec():
             filter_condition=args.tag_filter,
             anon_fields=args.anon_fields,
         )
-        await asyncio.gather(*mgr.map_method("store_sample", data=data))
+        if not data.empty:
+            samples_batch.append(data)
+
+        samples_collected += 1
+        if samples_collected >= args.sink_batch_size:
+            await asyncio.gather(*mgr.map_method("store_samples", samples=samples_batch))
+            samples_batch = []
+            samples_collected = 0
+
+    # Flush remaining samples on exit
+    if samples_batch:
+        await asyncio.gather(*mgr.map_method("store_samples", samples=samples_batch))
 
     await asyncio.gather(*mgr.map_method("teardown"))
     if exit_error:

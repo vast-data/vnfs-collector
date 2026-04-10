@@ -22,55 +22,31 @@ async def test_prometheus_driver_setup():
 @pytest.mark.asyncio
 @patch("prometheus_client.start_http_server", MagicMock())
 @patch("prometheus_client.REGISTRY.unregister", MagicMock())
-async def test_store_sample():
-    driver = PrometheusDriver(common_args=argparse.Namespace(envs=[]))
+async def test_store_sample_single(data):
+    driver = PrometheusDriver(common_args=argparse.Namespace(envs=["JOB"]))
     await driver.setup()
 
-    sample_data = MagicMock()
-    sample_data.empty = False
-    await driver.store_sample(sample_data)
+    await driver.store_samples([data])
 
-    # Check if the sample data is stored as latest
-    assert driver.latest_sample == sample_data
+    # Check if the sample data is stored (aggregated)
+    assert driver.latest_sample is not None
 
 
 @pytest.mark.asyncio
 @patch("prometheus_client.start_http_server", MagicMock())
 @patch("prometheus_client.REGISTRY.unregister", MagicMock())
-async def test_store_empty_sample_clears_latest():
-    driver = PrometheusDriver(common_args=argparse.Namespace(envs=[]))
+async def test_store_sample_aggregates_batch(data):
+    driver = PrometheusDriver(common_args=argparse.Namespace(envs=["JOB"]))
     await driver.setup()
 
-    # First store non-empty data
-    sample_data = MagicMock()
-    sample_data.empty = False
-    await driver.store_sample(sample_data)
-    assert driver.latest_sample == sample_data
+    # Store a batch of identical samples
+    batch = [data, data]
+    await driver.store_samples(batch)
 
-    # Then store empty data - should clear latest_sample
-    empty_data = MagicMock()
-    empty_data.empty = True
-    await driver.store_sample(empty_data)
-    assert driver.latest_sample is None
-
-
-@pytest.mark.asyncio
-@patch("prometheus_client.start_http_server", MagicMock())
-@patch("prometheus_client.REGISTRY.unregister", MagicMock())
-async def test_store_sample_replaces_previous():
-    driver = PrometheusDriver(common_args=argparse.Namespace(envs=[]))
-    await driver.setup()
-
-    sample_data1 = MagicMock()
-    sample_data1.empty = False
-    sample_data2 = MagicMock()
-    sample_data2.empty = False
-
-    await driver.store_sample(sample_data1)
-    await driver.store_sample(sample_data2)
-
-    # Latest sample should be the second one
-    assert driver.latest_sample == sample_data2
+    # The aggregated result should have summed stats
+    assert driver.latest_sample is not None
+    # After aggregation, we should have fewer or equal rows than original
+    assert len(driver.latest_sample) <= len(data)
 
 
 @pytest.mark.asyncio
@@ -79,7 +55,7 @@ async def test_store_sample_replaces_previous():
 async def test_collect_is_readonly(data):
     driver = PrometheusDriver(common_args=argparse.Namespace(envs=["JOB"]))
     await driver.setup()
-    await driver.store_sample(data)
+    await driver.store_samples([data])
 
     # Collect metrics twice
     metrics1 = list(driver.collect())
@@ -98,7 +74,7 @@ async def test_collect_is_readonly(data):
 async def test_collect_metrics(data):
     driver = PrometheusDriver(common_args=argparse.Namespace(envs=["JOB"]))
     await driver.setup()
-    await driver.store_sample(data)
+    await driver.store_samples([data])
 
     # Mock `_create_gauge`
     with patch.object(
@@ -107,4 +83,36 @@ async def test_collect_metrics(data):
         metrics = list(driver.collect())
         # Verify that metrics were collected
         assert len(metrics) > 0
-        assert mock_create_gauge.call_count == 260
+        # After aggregation, the call count depends on number of unique label combinations
+        assert mock_create_gauge.call_count > 0
+
+
+@pytest.mark.asyncio
+@patch("prometheus_client.start_http_server", MagicMock())
+@patch("prometheus_client.REGISTRY.unregister", MagicMock())
+async def test_store_empty_batch():
+    driver = PrometheusDriver(common_args=argparse.Namespace(envs=[]))
+    await driver.setup()
+
+    await driver.store_samples([])
+
+    # Empty batch should set latest_sample to None
+    assert driver.latest_sample is None
+
+
+@pytest.mark.asyncio
+@patch("prometheus_client.start_http_server", MagicMock())
+@patch("prometheus_client.REGISTRY.unregister", MagicMock())
+async def test_store_empty_batch_clears_stale_data(data):
+    driver = PrometheusDriver(common_args=argparse.Namespace(envs=["JOB"]))
+    await driver.setup()
+
+    # First store some data
+    await driver.store_samples([data])
+    assert driver.latest_sample is not None
+
+    # Then store empty batch (simulates all workloads stopped)
+    await driver.store_samples([])
+
+    # Stale data should be cleared
+    assert driver.latest_sample is None

@@ -2,6 +2,5 @@
 set -e
 
 /opt/vnfs-collector/src/hack/pack_install.sh
-if systemctl daemon-reload > /dev/null 2>&1; then
-	systemctl enable vnfs-collector > /dev/null 2>&1
-fi
+
+#DEBHELPER#

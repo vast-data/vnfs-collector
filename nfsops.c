@@ -355,14 +355,26 @@ int trace_nfs_lock_ret(struct pt_regs *ctx)
 	return 0;
 }
 
-int trace_nfs_file_mmap(struct pt_regs *ctx, struct file *file,
-		struct vm_area_struct *vma)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,17,0)
+int trace_nfs_file_mmap(struct pt_regs *ctx,
+		struct vm_area_desc *desc)
+{
+	struct file *file = desc->file;
+	if (should_filter_file(file))
+		return 0;
+
+	return trace_nfs_function_entry(ctx, file->f_inode, 0);
+}
+#else
+int trace_nfs_file_mmap(struct pt_regs *ctx,
+		struct file *file, struct vm_area_struct *vma)
 {
 	if (should_filter_file(file))
 		return 0;
 
 	return trace_nfs_function_entry(ctx, file->f_inode, 0);
 }
+#endif
 
 int trace_nfs_file_mmap_ret(struct pt_regs *ctx)
 {

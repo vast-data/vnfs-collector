@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import vastdb
 from vastdb.errors import NotFound
 import pyarrow as pa
+import pandas as pd
 
 from vnfs_collector.drivers.base import DriverBase
 from vnfs_collector.utils import InvalidArgument
@@ -121,21 +122,24 @@ class VdbDriver(DriverBase):
         self._refresh_vdb_schema()
         self.logger.info(f"{self} has been initialized.")
 
-    async def store_sample(self, data, fail_on_error=False):
-        if data.empty:
+    async def store_samples(self, samples: list, fail_on_error=False):
+        if not samples:
             return
 
         if self.should_read_envs:
             self._refresh_vdb_schema()
 
+        # Concatenate all samples into one DataFrame for batch insert
+        combined = pd.concat(samples, ignore_index=True)
+
         rows = {}
-        tags = data.TAGS.to_list()
+        tags = combined.TAGS.to_list()
         for col in self.arrow_schema:
             if col.name.startswith(ENV_VAR_PREFIX):
                 original_name = col.name[len(ENV_VAR_PREFIX):]
                 rows[col.name] = [t.get(original_name, "") for t in tags]
             else:
-                rows[col.name] = data[col.name].to_list()
+                rows[col.name] = combined[col.name].to_list()
 
         session = vastdb.connect(
             endpoint=self.db_endpoint,
@@ -151,7 +155,7 @@ class VdbDriver(DriverBase):
                 if self.envs_from_vdb_schema and not fail_on_error:
                     self.read_db_schema_ts = datetime(1970, 1, 1)
                     self._refresh_vdb_schema()
-                    await self.store_sample(data, fail_on_error=True)
+                    await self.store_samples(samples, fail_on_error=True)
                 else:
                     raise exc
             finally:

@@ -3,7 +3,7 @@
 # - SCHEDID
 # - POD_NAME
 interval: 60
-vaccum: 600
+# sink_batch_size: 1
 # screen: {}
 file:
  samples_path: /opt/vnfs-collector/vnfs-collector.log
@@ -25,3 +25,6 @@ file:
 #  sasl_username: <username>
 #  sasl_password: <password>
 #  security_protocol: SASL_PLAINTEXT
+# otel:
+#  otel_collector_host: <host>
+#  otel_collector_port: 4317
