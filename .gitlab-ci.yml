@@ -1,12 +1,21 @@
+include:
+  - project: 'devops/ci-templates'
+    file: '/templates/external-repo.gitlab-ci.yml'
+    ref: 'main'
+
 stages:
+  - security
   - build
   - release
+  - sync
 
 image: ${AWS_ACCOUNT_ID}.dkr.ecr.eu-west-1.amazonaws.com/dev/vnfs-collector:CI-2025-01-03
 
 variables:
   DOCKER_REGISTRY: ${AWS_ACCOUNT_ID}.dkr.ecr.eu-west-1.amazonaws.com
   IMAGE_NAME: ${AWS_ACCOUNT_ID}.dkr.ecr.eu-west-1.amazonaws.com/dev/vnfs-collector:${CI_PIPELINE_ID}
+  GITHUB_ORG: "vast-data"
+  GITHUB_REPO: "vnfs-collector"
 
 before_script:
   - git fetch --unshallow
@@ -51,23 +60,13 @@ update_dockerhub:
     - vast-dev-builder
 
 
-release_vnfs_collector:
-  image:
-    name: alpine/git
-    entrypoint: [""]
-  only:
-    - tags
-  stage: release
-  before_script:
-    - git config --global user.email "$GITLAB_USER_EMAIL"
-    - git config --global user.name "$GITLAB_USER_NAME"
-  script: |
-    set -x
-    TAG=$(git describe --tags --abbrev=0)
-    TARGET_BRANCH=main
-    git remote add github https://oauth2:$GITHUB_TOKEN@github.com/vast-data/vnfs-collector.git || true
-    git fetch github $TARGET_BRANCH
-    git checkout -B $TARGET_BRANCH
-    git push --tags github HEAD:$TARGET_BRANCH
-  tags:
-    - vast-dev-builder
+# Sync job rule overrides (from external-repo.gitlab-ci.yml template)
+# Disable branch sync - only sync on tags
+sync-branch-to-github:
+  rules:
+    - when: never
+
+# Sync on any tag (not just protected tags)
+sync-tag-to-github:
+  rules:
+    - if: $CI_COMMIT_TAG
