@@ -6,6 +6,7 @@ debian/vnfs-collector*
 nfsstats-*.log
 nsfops.log
 debian/changelog
+debian/control
 version.txt
 
 # Byte-compiled / optimized / DLL files

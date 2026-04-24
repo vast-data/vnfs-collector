@@ -2,9 +2,11 @@ Name:           vnfs-collector
 Version:        %{_version}
 Release:        %{_release}
 Summary:        NFS metrics collector based on eBPF
-BuildArch:      noarch
 License:        Apache-2.0
 Provides:       vnfs-collector
+# BuildArch is driven by `rpmbuild --target` (Makefile passes the target
+# arch for per-(python,arch) offline builds, or `noarch` for the legacy
+# single-package online build).
 Requires:       python(abi) >= 3.9 python3-bcc
 Requires(post): systemd
 
@@ -32,6 +34,16 @@ install -m 600 %{_sourcedir}/nfsops.yaml %{buildroot}/opt/$pname/
 mkdir -p %{buildroot}/etc/systemd/system/
 install -m 644 %{_sourcedir}/systemd/$pname.service %{buildroot}/etc/systemd/system/
 cp -r %{_sourcedir}/hack/* %{buildroot}/opt/$pname/src/hack/
+
+# Bundle the offline wheelhouse if it was produced by the build (see Makefile
+# `wheelhouse` target). When present, postinst will pip-install from here
+# with --no-index and no internet access is needed. The wheelhouse covers
+# every python minor version in the build-time matrix, so the package
+# works regardless of which python3 the target host provides.
+if [ -d %{_sourcedir}/dist/wheelhouse ]; then
+    mkdir -p %{buildroot}/opt/$pname/src/wheelhouse
+    cp -r %{_sourcedir}/dist/wheelhouse/. %{buildroot}/opt/$pname/src/wheelhouse/
+fi
 
 %files
 /opt/vnfs-collector

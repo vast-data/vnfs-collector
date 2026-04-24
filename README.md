@@ -63,6 +63,90 @@ make rpm
 ```
 Build artifact will be located in the `dist` directory.
 
+#### Offline (air-gapped) installation
+
+By default (`OFFLINE=0`), `make rpm` and `make deb` produce a single
+`noarch` package. At install time the `postinst` script `pip install`s
+the python deps from the configured pip index, so the target host must
+have network access (or a reachable index configured via `PIP_*`
+environment variables).
+
+To build artifacts suitable for air-gapped installation, pass
+`OFFLINE=1`:
+
+```bash
+make rpm OFFLINE=1
+make deb OFFLINE=1
+```
+
+This produces **one package per architecture**. Each package is
+properly arch-tagged and bundles a wheelhouse containing wheels for
+every supported python minor version. The `postinst` script picks
+whichever `python3 >= 3.9` is installed on the target host and lets
+`pip install --no-index` match the right wheels out of the bundle —
+so a single artifact works across any python3 version the host happens
+to ship.
+
+##### Artifact naming
+
+For `make rpm deb OFFLINE=1` with the default matrix, `dist/` ends up
+containing:
+
+```
+dist/vnfs-collector-1.5-0.g5ee6ea618199.x86_64.rpm
+dist/vnfs-collector-1.5-0.g5ee6ea618199.aarch64.rpm
+dist/vnfs-collector_1.5-0.g5ee6ea618199_amd64.deb
+dist/vnfs-collector_1.5-0.g5ee6ea618199_arm64.deb
+```
+
+Customers just pick the one matching their host architecture.
+
+##### Matrix knobs (OFFLINE=1)
+
+| Knob                      | Default                                            |
+|---------------------------|----------------------------------------------------|
+| `WHL_ARCHS`               | `x86_64 aarch64`                                   |
+| `WHL_PYVERS`              | `3.9 3.10 3.11 3.12 3.13 3.14`                     |
+| `WHL_PLATFORMS_x86_64`    | `manylinux_2_28_x86_64 manylinux_2_17_x86_64`      |
+| `WHL_PLATFORMS_aarch64`   | `manylinux_2_28_aarch64 manylinux_2_17_aarch64`    |
+| `WHL_EXTRAS`              | `pip setuptools`                                   |
+
+`WHL_ARCHS` controls how many artifacts are produced (one per entry).
+`WHL_PYVERS` controls which python minor versions each package
+supports at install time — the wheelhouse pulls wheels for every
+listed version so pip can match the target host's python3.
+
+For each `(py, arch)` download, pip is given both manylinux platform
+tags at once so it can accept wheels regardless of which generation
+they declare.
+
+Single-arch build for a smaller/faster release:
+
+```bash
+make rpm OFFLINE=1 WHL_ARCHS="x86_64"
+```
+
+Extend supported python versions (e.g. add 3.X):
+
+```bash
+make rpm OFFLINE=1 WHL_PYVERS="3.9 3.10 3.11 3.12 3.13 3.14 3.X"
+```
+
+Shrink to a single-version build (smaller package; at install time the
+`postinst` will locate and use a matching `pythonX.Y` on the target
+host, failing fast with a clear error if none is found):
+
+```bash
+make rpm OFFLINE=1 WHL_PYVERS="3.12" WHL_ARCHS="x86_64"
+```
+
+Build only the combined dist/wheelhouse (useful for debugging the
+download matrix without invoking `rpmbuild`/`dpkg-buildpackage`):
+
+```bash
+make wheelhouse OFFLINE=1
+```
+
 ### Installation
 
 <div style="border: 1px solid yellow; background-color: #fffadd; padding: 10px; margin: 10px 0;">
