@@ -27,8 +27,8 @@ pylib_wheel=vnfs_collector-%{_version}.%{_post}-py3-none-any.whl
 
 # Install the tarball and other files
 install -m 755 %{_sourcedir}/dist/$pylib_wheel %{buildroot}/opt/$pname/src/
-install -m 755 %{_sourcedir}/version.txt %{buildroot}/opt/$pname/src/
-install -m 755 %{_sourcedir}/nfsops.yaml %{buildroot}/opt/$pname/
+install -m 644 %{_sourcedir}/version.txt %{buildroot}/opt/$pname/src/
+install -m 600 %{_sourcedir}/nfsops.yaml %{buildroot}/opt/$pname/
 mkdir -p %{buildroot}/etc/systemd/system/
 install -m 644 %{_sourcedir}/systemd/$pname.service %{buildroot}/etc/systemd/system/
 cp -r %{_sourcedir}/hack/* %{buildroot}/opt/$pname/src/hack/
