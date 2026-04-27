@@ -7,7 +7,7 @@ COMMIT_COUNT=$(shell echo ${VERSION} | cut -d'-' -f 2)
 
 OFFLINE ?= 0
 WHL_ARCHS ?= x86_64 aarch64
-WHL_PYVERS ?= 3.9 3.10 3.11 3.12
+WHL_PYVERS ?= 3.9 3.10 3.11 3.12 3.13 3.14
 WHL_PLATFORMS_x86_64  ?= manylinux_2_28_x86_64 manylinux_2_17_x86_64
 WHL_PLATFORMS_aarch64 ?= manylinux_2_28_aarch64 manylinux_2_17_aarch64
 WHL_EXTRAS ?= pip setuptools
