@@ -35,7 +35,8 @@ cp -r %{_sourcedir}/hack/* %{buildroot}/opt/$pname/src/hack/
 
 %files
 /opt/vnfs-collector
-%config(noreplace)/opt/vnfs-collector/nfsops.yaml
+%exclude /opt/vnfs-collector/nfsops.yaml
+%config(noreplace) /opt/vnfs-collector/nfsops.yaml
 /etc/systemd/system/vnfs-collector.service
 
 %post
