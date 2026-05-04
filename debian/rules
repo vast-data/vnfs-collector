@@ -37,3 +37,14 @@ override_dh_auto_install:
 	install -m 600 $(CURDIR)/nfsops.yaml $(install_path)/opt/$(pname)/
 	install -m 644 $(CURDIR)/systemd/$(pname).service $(CURDIR)/debian/
 	cp -r $(CURDIR)/hack/* $(install_path)/opt/$(pname)/src/hack/
+
+	# Bundle the offline wheelhouse if it was produced by the build (see
+	# Makefile `wheelhouse` target). When present, postinst will
+	# pip-install from here with --no-index and no internet is required.
+	# The wheelhouse covers every python minor version in the build-time
+	# matrix, so the package works regardless of which python3 the target
+	# host provides.
+	if [ -d $(CURDIR)/dist/wheelhouse ]; then \
+		mkdir -p $(install_path)/opt/$(pname)/src/wheelhouse; \
+		cp -r $(CURDIR)/dist/wheelhouse/. $(install_path)/opt/$(pname)/src/wheelhouse/; \
+	fi

@@ -361,8 +361,4 @@ async def _exec():
         logger.error(str(exit_error))
 
 def main():
-    loop = asyncio.get_event_loop()
-    try:
-        return loop.run_until_complete(_exec())
-    finally:
-        loop.close()
+    return asyncio.run(_exec())

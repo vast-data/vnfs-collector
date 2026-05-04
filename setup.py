@@ -17,7 +17,7 @@ subprocess.run([sys.executable, os.path.join(ROOT, PACKAGE, "link_bcc.py")])
 
 requires = [
     "psutil==6.0.0",
-    "PyYAML==6.0.1",
+    "PyYAML>=6.0.1,<7.0",
     "stevedore==3.5.2",
     "prometheus_client==0.17.1",
     "vastdb",
