@@ -240,7 +240,8 @@ class MutableEnvsMixin:
 
 class MountsMap:
     def __init__(self, vaccum_interval=600):
-        self.map = {}
+        self.by_mnt_id = {}
+        self.by_devt = {}
         self.vaccum_interval = vaccum_interval
         self.start = datetime.now()
         self.refresh_map_mountinfo()
@@ -258,41 +259,59 @@ class MountsMap:
 
         for mount in mounts:
             parts = mount.split()
+            mnt_id = parts[0]
             devt = parts[2]
             mountpoint = parts[4]
             fstype = parts[parts.index("-") + 1]
             device = parts[parts.index("-") + 2]
             if 'nfs' not in fstype:
                 continue
-            self.map[devt] = MountInfo(mountpoint, device)
+            mi = MountInfo(mountpoint, device)
+            self.by_mnt_id[mnt_id] = mi
+            self.by_devt[devt] = mi
 
     def refresh_map(self):
         for p in psutil.disk_partitions(all=True):
             if 'nfs' not in p.fstype:
                 continue
             devt = self.devt_to_str(os.stat(p.mountpoint).st_dev)
-            self.map[devt] = MountInfo(p.mountpoint, p.device)
+            self.by_devt[devt] = MountInfo(p.mountpoint, p.device)
 
     def devt_to_str(self, st_dev):
         MINORBITS = 20
         return "{}:{}".format(st_dev >> MINORBITS, st_dev & 2**MINORBITS-1)
 
-    def get_mountpoint(self, st_dev, pid="self"):
-        dev = self.devt_to_str(st_dev)
-        try:
-            return self.map[dev]
-        except KeyError:
-            if (datetime.now() - self.start).total_seconds() > self.vaccum_interval:
-                self.map = {}
-                self.start = datetime.now()
-            # refresh our view on the mountinfo map
-            self.refresh_map_mountinfo(pid)
-            if dev in self.map.keys():
-                return self.map[dev]
-            self.refresh_map()
-            if dev in self.map.keys():
-                return self.map[dev]
-        logger.warning("No mountpoint found for devt {}".format(dev))
+    def get_mountpoint(self, mnt_id, sbdev, pid="self"):
+        """
+        Resolve NFS mount metadata using mountinfo mount id (kernel struct mount::mnt_id),
+        falling back to superblock device id (major:minor) when mnt_id is absent or unknown.
+        """
+        dev = self.devt_to_str(sbdev)
+
+        def _lookup():
+            if mnt_id:
+                mi = self.by_mnt_id.get(str(int(mnt_id)))
+                if mi is not None:
+                    return mi
+            return self.by_devt.get(dev)
+
+        res = _lookup()
+        if res is not None:
+            return res
+        if (datetime.now() - self.start).total_seconds() > self.vaccum_interval:
+            self.by_mnt_id = {}
+            self.by_devt = {}
+            self.start = datetime.now()
+        self.refresh_map_mountinfo(pid)
+        res = _lookup()
+        if res is not None:
+            return res
+        self.refresh_map()
+        res = _lookup()
+        if res is not None:
+            return res
+        logger.warning("No mountpoint found for mnt_id {} devt {}".format(mnt_id or 0, dev))
+        return None
 
 class PidEnvMap:
     """
@@ -371,11 +390,12 @@ class StatsCollector(MutableEnvsMixin):
     Tracer traps pid execution and collects the existance of the tracked
     environment variables.
     """
-    def __init__(self, _args, bpf, pid_env_map, mounts_map):
+    def __init__(self, _args, bpf, pid_env_map, mounts_map, use_mnt_id_attribution=True):
         super().__init__(_args)
         self.b = bpf
         self.pid_env_map = pid_env_map
         self.mounts_map = mounts_map
+        self.use_mnt_id_attribution = use_mnt_id_attribution
         self.hostname = os.getenv("HOSTNAME", socket.gethostname())
         # check whether hash table batch ops is supported
         try:
@@ -452,6 +472,19 @@ class StatsCollector(MutableEnvsMixin):
         if BPF.get_kprobe_functions(b'nfs3_listxattr'):
             self.b.attach_kprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs")        # updates listxattr count
             self.b.attach_kretprobe(event="nfs3_listxattr", fn_name="trace_nfs_listxattrs_ret") # updates listxattr errors,duration
+        if self.use_mnt_id_attribution:
+            for sym, fn in (
+                    ("security_path_unlink", "trace_sp_unlink"),
+                    ("security_path_mkdir", "trace_sp_mkdir"),
+                    ("security_path_rmdir", "trace_sp_rmdir"),
+                    ("security_path_symlink", "trace_sp_symlink"),
+                    ("security_path_mknod", "trace_sp_mknod"),
+                    ("security_path_link", "trace_sp_link"),
+                    ("security_path_rename", "trace_sp_rename"),
+            ):
+                if BPF.get_kprobe_functions(sym.encode()):
+                    self.b.attach_kprobe(event=sym, fn_name=fn)
+                    self.b.attach_kretprobe(event=sym, fn_name="trace_sp_ret_fail_clear")
 
     def collect_stats(self, interval, squash_pid=False, filter_tags=None, filter_condition=None, anon_fields=None):
         timestamp = pd.Timestamp.utcnow().astimezone(None).floor("s")
@@ -534,7 +567,7 @@ class StatsCollector(MutableEnvsMixin):
                     "LISTXATTR_DURATION":nstosec(v.listxattr.duration),
                     "TAGS":         hashabledict(self.pid_env_map.get(k.tgid, self.envs)),
             }
-            mount_info = self.mounts_map.get_mountpoint(k.sbdev, k.tgid)
+            mount_info = self.mounts_map.get_mountpoint(k.mnt_id, k.sbdev, k.tgid)
             if mount_info:
                 output["MOUNT"] = mount_info.mountpoint
                 output["REMOTE_PATH"] = mount_info.remote_path
