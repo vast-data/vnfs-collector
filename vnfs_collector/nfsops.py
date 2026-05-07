@@ -393,7 +393,7 @@ class StatsCollector(MutableEnvsMixin):
         self.b.attach_kprobe(event="nfs_file_open", fn_name="trace_nfs_file_open")               # updates open count
         self.b.attach_kretprobe(event="nfs_file_open", fn_name="trace_nfs_file_open_ret")        # updates open errors,duration
         self.b.attach_kprobe(event="nfs_getattr", fn_name="trace_nfs_getattr")                   # updates getattr count
-        self.b.attach_kretprobe(event="nfs_getattr", fn_name="trace_nfs_getattr")                # updates getattr errors,duration
+        self.b.attach_kretprobe(event="nfs_getattr", fn_name="trace_nfs_getattr_ret")            # updates getattr errors,duration
         self.b.attach_kprobe(event="nfs_setattr", fn_name="trace_nfs_setattr")                   # updates setattr count
         self.b.attach_kretprobe(event="nfs_setattr", fn_name="trace_nfs_setattr_ret")            # updates setattr errors,duration
         self.b.attach_kprobe(event="nfs_file_flush", fn_name="trace_nfs_file_flush")             # updates flush count
