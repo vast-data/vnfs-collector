@@ -29,6 +29,7 @@ from vnfs_collector.utils import (
     flatten_keys,
 )
 from vnfs_collector.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTracer, logger
+from vnfs_collector.bpf_mount_offsets import vfsmount_to_mnt_id_delta
 
 urllib3.disable_warnings()
 
@@ -264,6 +265,26 @@ async def _exec():
     # read BPF program text
     with BASE_PATH.joinpath("nfsops.c").open() as f:
         bpf_text = f.read()
+    use_mnt_id = True
+    try:
+        _mnt_delta = vfsmount_to_mnt_id_delta()
+    except Exception as e:
+        use_mnt_id = False
+        _mnt_delta = 0
+        logger.warning(
+            "Mount-id attribution disabled (mnt_id=0; using superblock dev only): %s",
+            e,
+        )
+    if use_mnt_id:
+        bpf_text = (
+            f"#define MOUNT_MNT_TO_MNT_ID_DELTA {_mnt_delta}\n"
+            "#define MOUNT_MNT_ID_DISABLED 0\n"
+        ) + bpf_text
+    else:
+        bpf_text = (
+            "#define MOUNT_MNT_TO_MNT_ID_DELTA 0\n"
+            "#define MOUNT_MNT_ID_DISABLED 1\n"
+        ) + bpf_text
     debug = args.debug
     if debug:
         logging.basicConfig(level=logging.DEBUG)
@@ -272,11 +293,16 @@ async def _exec():
     if args.ebpf:
         exit()
 
-    # initialize BPF
     bpf = BPF(text=bpf_text)
     pidEnvMap = PidEnvMap(vaccum_interval=args.vaccum)
     mountsMap = MountsMap(vaccum_interval=args.vaccum)
-    collector = StatsCollector(_args=args, bpf=bpf, pid_env_map=pidEnvMap, mounts_map=mountsMap)
+    collector = StatsCollector(
+        _args=args,
+        bpf=bpf,
+        pid_env_map=pidEnvMap,
+        mounts_map=mountsMap,
+        use_mnt_id_attribution=use_mnt_id,
+    )
     mgr = NamedExtensionManager(
         namespace=ENTRYPOINT_GROUP,
         invoke_on_load=True,

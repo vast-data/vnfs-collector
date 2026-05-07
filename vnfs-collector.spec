@@ -9,6 +9,7 @@ Provides:       vnfs-collector
 # single-package online build).
 Requires:       python(abi) >= 3.9 python3-bcc
 Requires(post): systemd
+Recommends:     dwarves
 
 %description
 eBPF-based metrics collector that tracks NFS operations per process/mount
