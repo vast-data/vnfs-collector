@@ -224,8 +224,8 @@ async def _exec():
         conf_parser.error("--sink-batch-size must be >= 1.")
 
     # Validate mutual dependencies
-    if args.tag_filter and not args.envs:
-        conf_parser.error("--tag-filter requires --envs to be specified.")
+    if args.tag_filter and not args.envs and not args.envs_from_vdb_schema:
+        conf_parser.error("--tag-filter requires --envs or --envs-from-vdb-schema to be specified.")
 
     if args.envs_from_vdb_schema and args.envs:
         conf_parser.error("--envs-from-vdb-schema and --envs are mutually exclusive.")
