@@ -407,7 +407,10 @@ class StatsCollector(MutableEnvsMixin):
         self.b.attach_kretprobe(event="nfs_flock", fn_name="trace_nfs_lock_ret")                 # updates lock errors,duration
         # check if kprobe exists (4.18.x)
         if BPF.get_kprobe_functions(b'nfs_file_splice_read'):
-            self.b.attach_kprobe(event="nfs_file_splice_read", fn_name="trace_nfs_file_splice_read") # updates reads,rbytes
+            self.b.attach_kprobe(event="nfs_file_splice_read",
+                                    fn_name="trace_nfs_file_splice_read")                       # updates reads,rbytes
+            self.b.attach_kretprobe(event="nfs_file_splice_read",
+                                    fn_name="trace_nfs_file_splice_ret")                        # updates reads errors,duration
         # check mmap kprobe handler (changed in kernel version >= v6.17)
         if BPF.get_kprobe_functions(b'nfs_file_mmap_prepare'):
             self.b.attach_kprobe(event="nfs_file_mmap_prepare",
