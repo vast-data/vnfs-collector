@@ -1,15 +1,39 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2025 Vast Data Ltd.
 
+/*
+ * Pull linux/build_bug.h before linux/fs.h, then force static_assert checks to
+ * always succeed in this TU. Clang BPF layout can disagree with the running
+ * kernel (e.g. struct filename). A plain ((void)0) replacement is invalid at
+ * file scope; kernel headers use static_assert after structs, so we keep the
+ * kernel macro shape but compile to _Static_assert(1, ...).
+ */
+#include <linux/build_bug.h>
+#undef static_assert
+#undef __static_assert
+#define __static_assert(expr, msg, ...) _Static_assert(1, "vnfs bpf")
+#define static_assert(expr, ...) __static_assert(expr, ##__VA_ARGS__, #expr)
+
 #include <uapi/linux/stat.h>
 #include <linux/fs.h>
 #include <linux/uio.h>
 #include <uapi/linux/ptrace.h>
+/*
+ * Byte delta from struct vfsmount* to struct mount.mnt_id.
+ * Set by userspace: offsetof(struct mount, mnt_id) - offsetof(struct mount, mnt)
+ */
+#ifndef MOUNT_MNT_TO_MNT_ID_DELTA
+#define MOUNT_MNT_TO_MNT_ID_DELTA 0
+#endif
+#ifndef MOUNT_MNT_ID_DISABLED
+#define MOUNT_MNT_ID_DISABLED 0
+#endif
 
 struct start_t {
 	struct inode *inode;
 	u64 start;
 	u64 count;
+	u32 mnt_id;
 };
 
 BPF_HASH(starts, u32, struct start_t);
@@ -20,6 +44,7 @@ struct info_t {
 	u32 tgid;
 	u32 uid;
 	char comm[TASK_COMM_LEN];
+	u32 mnt_id;
 	u32 sbdev;
 };
 
@@ -29,7 +54,6 @@ struct stat_t {
 	u32 errors;
 } __attribute__((packed));
 
-// the value of the output summary
 struct stats_t {
 	// regular file operations
 	struct stat_t open;
@@ -62,12 +86,118 @@ struct stats_t {
 };
 
 BPF_HASH(counts, struct info_t, struct stats_t);
+BPF_HASH(mnt_ns_hint, u64, u32);
 
 struct pidinfo_t {
 	u32 pid;
 };
 
 BPF_PERF_OUTPUT(events);
+
+static __always_inline void read_mnt_id_from_vfsmnt(struct vfsmount *vm, u32 *out)
+{
+	if (!out)
+		return;
+#if MOUNT_MNT_ID_DISABLED
+	*out = 0;
+	(void)vm;
+#else
+	if (!vm)
+		return;
+	if (bpf_probe_read_kernel(out, sizeof(*out),
+				  (void *)vm + MOUNT_MNT_TO_MNT_ID_DELTA))
+		*out = 0;
+#endif
+}
+
+static __always_inline void clear_mnt_hint(void)
+{
+	u64 k = bpf_get_current_pid_tgid();
+	mnt_ns_hint.delete(&k);
+}
+
+static __always_inline void store_hint_from_dir(struct path *dirp)
+{
+	struct path p;
+
+	if (!dirp)
+		return;
+	if (bpf_probe_read_kernel(&p, sizeof(p), dirp))
+		return;
+
+	u32 mid = 0;
+	read_mnt_id_from_vfsmnt(p.mnt, &mid);
+	u64 k = bpf_get_current_pid_tgid();
+	mnt_ns_hint.update(&k, &mid);
+}
+
+static __always_inline void store_hint_new_dir_link(void *new_dir_ptr)
+{
+	struct path *new_dir = new_dir_ptr;
+	struct path p;
+
+	if (!new_dir)
+		return;
+	if (bpf_probe_read_kernel(&p, sizeof(p), new_dir))
+		return;
+
+	u32 mid = 0;
+	read_mnt_id_from_vfsmnt(p.mnt, &mid);
+	u64 k = bpf_get_current_pid_tgid();
+	mnt_ns_hint.update(&k, &mid);
+}
+
+int trace_sp_ret_fail_clear(struct pt_regs *ctx)
+{
+	if (!PT_REGS_RC(ctx))
+		return 0;
+
+	u64 k = bpf_get_current_pid_tgid();
+	mnt_ns_hint.delete(&k);
+	return 0;
+}
+
+int trace_sp_unlink(struct pt_regs *ctx)
+{
+	store_hint_from_dir((struct path *)PT_REGS_PARM1(ctx));
+	return 0;
+}
+
+int trace_sp_mkdir(struct pt_regs *ctx)
+{
+	store_hint_from_dir((struct path *)PT_REGS_PARM1(ctx));
+	return 0;
+}
+
+int trace_sp_rmdir(struct pt_regs *ctx)
+{
+	store_hint_from_dir((struct path *)PT_REGS_PARM1(ctx));
+	return 0;
+}
+
+int trace_sp_symlink(struct pt_regs *ctx)
+{
+	store_hint_from_dir((struct path *)PT_REGS_PARM1(ctx));
+	return 0;
+}
+
+int trace_sp_mknod(struct pt_regs *ctx)
+{
+	store_hint_from_dir((struct path *)PT_REGS_PARM1(ctx));
+	return 0;
+}
+
+int trace_sp_link(struct pt_regs *ctx)
+{
+	store_hint_new_dir_link((void *)PT_REGS_PARM2(ctx));
+	return 0;
+}
+
+int trace_sp_rename(struct pt_regs *ctx)
+{
+	store_hint_from_dir((struct path *)PT_REGS_PARM1(ctx));
+	return 0;
+}
 
 int trace_execve(struct pt_regs *ctx,
 		const char __user *filename,
@@ -98,6 +228,7 @@ static struct stats_t *get_stats(u64 *start_time, u64 *byte_count)
 		.pid = pid,
 		.tgid = bpf_get_current_pid_tgid() >> 32,
 		.uid = bpf_get_current_uid_gid(),
+		.mnt_id = startp->mnt_id,
 		.sbdev = startp->inode->i_sb->s_dev,
 	};
 	bpf_get_current_comm(&info.comm, sizeof(info.comm));
@@ -109,24 +240,11 @@ static struct stats_t *get_stats(u64 *start_time, u64 *byte_count)
 	return counts.lookup_or_try_init(&info, &zero);
 }
 
-static struct start_t *get()
+static struct start_t *get(void)
 {
 	u32 pid = bpf_get_current_pid_tgid();
 	struct start_t zero = {};
 	return starts.lookup_or_try_init(&pid, &zero);
-}
-
-static int trace_nfs_function_entry(struct pt_regs *ctx,
-		struct inode *inode, u64 count)
-{
-	struct start_t *startp = get();
-	if (!startp)
-		return 0;
-
-	startp->start = bpf_ktime_get_ns();
-	startp->inode = inode;
-	startp->count = count;
-	return 0;
 }
 
 static int should_filter_file(struct file *file)
@@ -135,7 +253,6 @@ static int should_filter_file(struct file *file)
 	int mode = file->f_inode->i_mode;
 	struct qstr d_name = de->d_name;
 
-	// skip I/O lacking a filename
 	if (d_name.len == 0)
 		return 1;
 
@@ -145,13 +262,75 @@ static int should_filter_file(struct file *file)
 	return 0;
 }
 
+static int trace_from_file(struct pt_regs *ctx, struct file *file, u64 count)
+{
+	if (should_filter_file(file))
+		return 0;
+
+	struct start_t *startp = get();
+	if (!startp)
+		return 0;
+
+	clear_mnt_hint();
+	struct path p;
+	bpf_probe_read_kernel(&p, sizeof(p), &file->f_path);
+	u32 mid = 0;
+	read_mnt_id_from_vfsmnt(p.mnt, &mid);
+	startp->mnt_id = mid;
+	startp->start = bpf_ktime_get_ns();
+	startp->inode = file->f_inode;
+	startp->count = count;
+	return 0;
+}
+
+static int trace_from_path(struct pt_regs *ctx, const struct path *path, u64 count)
+{
+	struct start_t *startp = get();
+
+	if (!startp)
+		return 0;
+
+	clear_mnt_hint();
+	u32 mid = 0;
+	read_mnt_id_from_vfsmnt(path->mnt, &mid);
+	startp->mnt_id = mid;
+	startp->start = bpf_ktime_get_ns();
+	startp->inode = path->dentry->d_inode;
+	startp->count = count;
+	return 0;
+}
+
+static int trace_from_inode_hint(struct pt_regs *ctx, struct inode *inode,
+				 u64 count)
+{
+	struct start_t *startp = get();
+
+	if (!startp)
+		return 0;
+
+	u64 k = bpf_get_current_pid_tgid();
+	u32 mid = 0;
+	u32 *hp = mnt_ns_hint.lookup(&k);
+
+	if (hp) {
+		mid = *hp;
+		mnt_ns_hint.delete(&k);
+	}
+
+	startp->mnt_id = mid;
+	startp->start = bpf_ktime_get_ns();
+	startp->inode = inode;
+	startp->count = count;
+	return 0;
+}
+
 static int file_read_write(struct pt_regs *ctx, struct file *file,
 		size_t count, int is_read)
 {
 	if (should_filter_file(file))
 		return 0;
 
-	return trace_nfs_function_entry(ctx, file->f_inode, count);
+	return trace_from_file(ctx, file, count);
 }
 
 static int file_read_write_ret(struct pt_regs *ctx, int is_read)
@@ -218,7 +397,7 @@ int trace_nfs_file_open(struct pt_regs *ctx, struct inode *inode,
 	if (should_filter_file(file))
 		return 0;
 
-	return trace_nfs_function_entry(ctx, inode, 0);
+	return trace_from_file(ctx, file, 0);
 }
 
 int trace_nfs_file_open_ret(struct pt_regs *ctx)
@@ -244,7 +423,7 @@ struct user_namespace *mnt_userns,
 		const struct path *path, struct kstat *stat, u32 request_mask,
 		unsigned int query_flags)
 {
-	return trace_nfs_function_entry(ctx, path->dentry->d_inode, 0);
+	return trace_from_path(ctx, path, 0);
 }
 
 int trace_nfs_getattr_ret(struct pt_regs *ctx)
@@ -269,7 +448,7 @@ struct user_namespace *mnt_userns,
 #endif
 		struct dentry *dentry, struct iattr *attr)
 {
-	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
+	return trace_from_inode_hint(ctx, dentry->d_inode, 0);
 }
 
 int trace_nfs_setattr_ret(struct pt_regs *ctx)
@@ -292,7 +471,7 @@ int trace_nfs_file_flush(struct pt_regs *ctx,
 	if (should_filter_file(file))
 		return 0;
 
-	return trace_nfs_function_entry(ctx, file->f_inode, 0);
+	return trace_from_file(ctx, file, 0);
 }
 
 int trace_nfs_file_flush_ret(struct pt_regs *ctx)
@@ -315,7 +494,7 @@ int trace_nfs_file_fsync(struct pt_regs *ctx,
 	if (should_filter_file(file))
 		return 0;
 
-	return trace_nfs_function_entry(ctx, file->f_inode, 0);
+	return trace_from_file(ctx, file, 0);
 }
 
 int trace_nfs_file_fsync_ret(struct pt_regs *ctx)
@@ -338,7 +517,7 @@ int trace_nfs_lock(struct pt_regs *ctx, struct file *file,
 	if (should_filter_file(file))
 		return 0;
 
-	return trace_nfs_function_entry(ctx, file->f_inode, 0);
+	return trace_from_file(ctx, file, 0);
 }
 
 int trace_nfs_lock_ret(struct pt_regs *ctx)
@@ -360,10 +539,11 @@ int trace_nfs_file_mmap(struct pt_regs *ctx,
 		struct vm_area_desc *desc)
 {
 	struct file *file = desc->file;
+
 	if (should_filter_file(file))
 		return 0;
 
-	return trace_nfs_function_entry(ctx, file->f_inode, 0);
+	return trace_from_file(ctx, file, 0);
 }
 #else
 int trace_nfs_file_mmap(struct pt_regs *ctx,
@@ -372,7 +552,7 @@ int trace_nfs_file_mmap(struct pt_regs *ctx,
 	if (should_filter_file(file))
 		return 0;
 
-	return trace_nfs_function_entry(ctx, file->f_inode, 0);
+	return trace_from_file(ctx, file, 0);
 }
 #endif
 
@@ -396,7 +576,7 @@ int trace_nfs_file_release(struct pt_regs *ctx, struct inode *inode,
 	if (should_filter_file(file))
 		return 0;
 
-	return trace_nfs_function_entry(ctx, file->f_inode, 0);
+	return trace_from_file(ctx, file, 0);
 }
 
 int trace_nfs_file_release_ret(struct pt_regs *ctx)
@@ -419,7 +599,7 @@ int trace_nfs_readdir(struct pt_regs *ctx, struct file *file,
 	if (should_filter_file(file))
 		return 0;
 
-	return trace_nfs_function_entry(ctx, file->f_inode, 0);
+	return trace_from_file(ctx, file, 0);
 }
 
 int trace_nfs_readdir_ret(struct pt_regs *ctx)
@@ -444,7 +624,7 @@ struct user_namespace *mnt_userns,
 #endif
 		struct inode *dir, struct dentry *dentry, umode_t mode, bool excl)
 {
-	return trace_nfs_function_entry(ctx, dir, 0);
+	return trace_from_inode_hint(ctx, dir, 0);
 }
 
 int trace_nfs_create_ret(struct pt_regs *ctx)
@@ -464,7 +644,7 @@ int trace_nfs_create_ret(struct pt_regs *ctx)
 int trace_nfs_link(struct pt_regs *ctx, struct dentry *old_dentry,
 		struct inode *dir, struct dentry *dentry)
 {
-	return trace_nfs_function_entry(ctx, dir, 0);
+	return trace_from_inode_hint(ctx, dir, 0);
 }
 
 int trace_nfs_link_ret(struct pt_regs *ctx)
@@ -483,7 +663,7 @@ int trace_nfs_link_ret(struct pt_regs *ctx)
 
 int trace_nfs_unlink(struct pt_regs *ctx, struct inode *dir, struct dentry *dentry)
 {
-	return trace_nfs_function_entry(ctx, dir, 0);
+	return trace_from_inode_hint(ctx, dir, 0);
 }
 
 int trace_nfs_unlink_ret(struct pt_regs *ctx)
@@ -508,7 +688,7 @@ struct user_namespace *mnt_userns,
 #endif
 		struct inode *dir, struct dentry *dentry, const char *symname)
 {
-	return trace_nfs_function_entry(ctx, dir, 0);
+	return trace_from_inode_hint(ctx, dir, 0);
 }
 
 int trace_nfs_symlink_ret(struct pt_regs *ctx)
@@ -528,7 +708,7 @@ int trace_nfs_symlink_ret(struct pt_regs *ctx)
 int trace_nfs_lookup(struct pt_regs *ctx, struct inode *dir,
 		struct dentry * dentry, unsigned int flags)
 {
-	return trace_nfs_function_entry(ctx, dir, 0);
+	return trace_from_inode_hint(ctx, dir, 0);
 }
 
 int trace_nfs_lookup_ret(struct pt_regs *ctx)
@@ -554,7 +734,7 @@ struct user_namespace *mnt_userns,
 		struct inode *old_dir, struct dentry *old_dentry,
 		struct inode *new_dir, struct dentry *new_dentry, unsigned int flags)
 {
-	return trace_nfs_function_entry(ctx, old_dir, 0);
+	return trace_from_inode_hint(ctx, old_dir, 0);
 }
 
 int trace_nfs_rename_ret(struct pt_regs *ctx)
@@ -573,7 +753,7 @@ int trace_nfs_rename_ret(struct pt_regs *ctx)
 
 int trace_nfs_do_access(struct pt_regs *ctx, struct inode *inode, const struct cred *cred, int mask)
 {
-	return trace_nfs_function_entry(ctx, inode, 0);
+	return trace_from_inode_hint(ctx, inode, 0);
 }
 
 int trace_nfs_do_access_ret(struct pt_regs *ctx)
@@ -598,7 +778,7 @@ struct user_namespace *mnt_userns,
 #endif
 		struct inode *dir, struct dentry *dentry, umode_t mode)
 {
-	return trace_nfs_function_entry(ctx, dir, 0);
+	return trace_from_inode_hint(ctx, dir, 0);
 }
 
 int trace_nfs_mkdir_ret(struct pt_regs *ctx)
@@ -617,7 +797,7 @@ int trace_nfs_mkdir_ret(struct pt_regs *ctx)
 
 int trace_nfs_rmdir(struct pt_regs *ctx, struct inode *dir, struct dentry *dentry)
 {
-	return trace_nfs_function_entry(ctx, dir, 0);
+	return trace_from_inode_hint(ctx, dir, 0);
 }
 
 int trace_nfs_rmdir_ret(struct pt_regs *ctx)
@@ -636,7 +816,7 @@ int trace_nfs_rmdir_ret(struct pt_regs *ctx)
 
 int trace_nfs_listxattrs(struct pt_regs *ctx, struct dentry *dentry, char *list, size_t size)
 {
-	return trace_nfs_function_entry(ctx, dentry->d_inode, 0);
+	return trace_from_inode_hint(ctx, dentry->d_inode, 0);
 }
 
 int trace_nfs_listxattrs_ret(struct pt_regs *ctx)

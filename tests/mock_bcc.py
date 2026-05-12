@@ -7,7 +7,7 @@ __version__ = "0.0.1"
 
 
 class BPF:
-    def __init__(self, text=None):
+    def __init__(self, text=None, **kwargs):
         self.text = text
 
     def load(self, *args, **kwargs):
@@ -29,10 +29,10 @@ class BPF:
         pass
 
     def get_kprobe_functions(self, *args, **kwargs):
-        pass
+        return []
 
     def kernel_struct_has_field(self, *args, **kwargs):
-        pass
+        return 0
 
     def get_table(self, *args, **kwargs):
         pass

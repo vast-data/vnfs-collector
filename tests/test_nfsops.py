@@ -139,14 +139,14 @@ def test_refresh_map(mock_stat):
     devt1 = mounts_map.devt_to_str(123456)
     devt2 = mounts_map.devt_to_str(654321)
 
-    assert devt1 in mounts_map.map
-    assert devt2 in mounts_map.map
+    assert devt1 in mounts_map.by_devt
+    assert devt2 in mounts_map.by_devt
 
-    assert mounts_map.map[devt1].mountpoint == '/mnt/test1'
-    assert mounts_map.map[devt1].device == '172.17.0.1:/mnt/test1'
+    assert mounts_map.by_devt[devt1].mountpoint == '/mnt/test1'
+    assert mounts_map.by_devt[devt1].device == '172.17.0.1:/mnt/test1'
 
-    assert mounts_map.map[devt2].mountpoint == '/mnt/test2'
-    assert mounts_map.map[devt2].device == '172.17.0.2:/mnt/test2'
+    assert mounts_map.by_devt[devt2].mountpoint == '/mnt/test2'
+    assert mounts_map.by_devt[devt2].device == '172.17.0.2:/mnt/test2'
 
 
 @patch('psutil.disk_partitions', MagicMock(return_value=fake_disk_partitions))
@@ -157,8 +157,8 @@ def test_get_mountpoint(mock_stat):
     devt1 = mounts_map.devt_to_str(123456)
     devt2 = mounts_map.devt_to_str(654321)
 
-    mount_info1 = mounts_map.get_mountpoint(123456)
-    mount_info2 = mounts_map.get_mountpoint(654321)
+    mount_info1 = mounts_map.get_mountpoint(0, 123456)
+    mount_info2 = mounts_map.get_mountpoint(0, 654321)
 
     assert isinstance(mount_info1, MountInfo)
     assert mount_info1.mountpoint == '/mnt/test1'
@@ -174,14 +174,16 @@ def test_get_mountpoint(mock_stat):
 def test_refresh_map_mountinfo():
     mounts_map = MountsMap()
     mounts_map.refresh_map_mountinfo()
-    map = mounts_map.map
-    assert len(map) == 2
-    assert "0:321" in map
-    assert "0:69" in map
-    assert map["0:321"].mountpoint == "/mnt/test"
-    assert map["0:69"].mountpoint == "/mnt/test2"
-    assert map["0:321"].device == "172.17.0.3:/"
-    assert map["0:69"].device == "172.17.0.2:/"
+    assert len(mounts_map.by_mnt_id) == 2
+    assert len(mounts_map.by_devt) == 2
+    assert "2585" in mounts_map.by_mnt_id
+    assert "446" in mounts_map.by_mnt_id
+    assert "0:321" in mounts_map.by_devt
+    assert "0:69" in mounts_map.by_devt
+    assert mounts_map.by_mnt_id["2585"].mountpoint == "/mnt/test"
+    assert mounts_map.by_mnt_id["446"].mountpoint == "/mnt/test2"
+    assert mounts_map.by_devt["0:321"].device == "172.17.0.3:/"
+    assert mounts_map.by_devt["0:69"].device == "172.17.0.2:/"
 
 
 @patch('psutil.disk_partitions')
@@ -191,7 +193,7 @@ def test_get_mountpoint_with_missing_device(mock_stat, mock_disk_partitions):
 
     mounts_map = MountsMap()
     devt = mounts_map.devt_to_str(123456)
-    mount_info = mounts_map.get_mountpoint(123456)
+    mount_info = mounts_map.get_mountpoint(0, 123456)
 
     assert mount_info is None
 
@@ -210,37 +212,43 @@ def _mountinfo_side_effect(pid):
 @patch.object(MountsMap, "refresh_map",  MagicMock())
 def test_get_mount_info_from_different_mountinfo_files(*_):
     mounts_map = MountsMap()
-    mount_info = mounts_map.get_mountpoint(321, "self")
+    mount_info = mounts_map.get_mountpoint(2585, 321, "self")
     assert mount_info.remote_path == "/"
     assert mount_info.mountpoint == "/mnt/test"
-    assert set(mounts_map.map) == {'0:321', '0:69'}
+    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446'}
+    assert set(mounts_map.by_devt.keys()) == {'0:321', '0:69'}
 
-    # Doesn't exist in mounts_self file
-    mount_info = mounts_map.get_mountpoint(420, "self")
+    # Doesn't exist in mounts_self file (sbdev-only lookup misses too)
+    mount_info = mounts_map.get_mountpoint(0, 420, "self")
     assert mount_info is None
-    assert set(mounts_map.map) == {'0:321', '0:69'}
+    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446'}
+    assert set(mounts_map.by_devt.keys()) == {'0:321', '0:69'}
 
-    mount_info = mounts_map.get_mountpoint(420, "162148")
+    mount_info = mounts_map.get_mountpoint(3518, 420, "162148")
     assert mount_info.remote_path == "/remote"
     assert mount_info.mountpoint == "/mnt/mydir"
-    assert set(mounts_map.map) == {'0:420', '0:321', '0:69'}
+    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446', '3518'}
+    assert set(mounts_map.by_devt.keys()) == {'0:420', '0:321', '0:69'}
 
-    # No changes as well. 162149 is pointed to the same detv
-    mount_info = mounts_map.get_mountpoint(420, "162149")
+    # No changes as well. 162149 is pointed to the same mount id / devt
+    mount_info = mounts_map.get_mountpoint(3518, 420, "162149")
     assert mount_info.remote_path == "/remote"
     assert mount_info.mountpoint == "/mnt/mydir"
-    assert set(mounts_map.map) == {'0:420', '0:321', '0:69'}
+    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446', '3518'}
+    assert set(mounts_map.by_devt.keys()) == {'0:420', '0:321', '0:69'}
 
     # Reset vacuum timeout
     mounts_map.start = datetime.datetime(2000, 1, 1)
     # Wrong devt. It should cause resetting the map
-    mount_info = mounts_map.get_mountpoint(421, "self")
+    mount_info = mounts_map.get_mountpoint(0, 421, "self")
     assert mount_info is None
-    assert set(mounts_map.map) == {'0:321', '0:69'}
-    mount_info = mounts_map.get_mountpoint(420, "162149")
+    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446'}
+    assert set(mounts_map.by_devt.keys()) == {'0:321', '0:69'}
+    mount_info = mounts_map.get_mountpoint(3518, 420, "162149")
     assert mount_info.remote_path == "/remote"
     assert mount_info.mountpoint == "/mnt/mydir2"
-    assert set(mounts_map.map) == {'0:420', '0:321', '0:69'}
+    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446', '3518'}
+    assert set(mounts_map.by_devt.keys()) == {'0:420', '0:321', '0:69'}
 
 
 def test_anonymize_valid_fields(data):
