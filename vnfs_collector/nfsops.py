@@ -222,6 +222,11 @@ class MountInfo:
             return match.group(1)
         return ""
 
+    def __str__(self):
+        return f"{self.mountpoint} remote={self.remote_path} dev={self.device}"
+
+    __repr__ = __str__
+
 
 class MutableEnvsMixin:
     """Mixin to provide a mutable `envs` property for managing environment variables."""
@@ -292,8 +297,15 @@ class MountsMap:
             if mnt_id:
                 mi = self.by_mnt_id.get(str(int(mnt_id)))
                 if mi is not None:
+                    logger.debug("mount-resolve pid=%s mnt_id=%s sbdev=%s via=mnt_id -> %s by_mnt_id=%s by_devt=%s",
+                                pid, mnt_id or 0, dev, mi, self.by_mnt_id, self.by_devt)
                     return mi
-            return self.by_devt.get(dev)
+            mi = self.by_devt.get(dev)
+            if mi is not None:
+                logger.debug("mount-resolve pid=%s mnt_id=%s sbdev=%s via=sbdev -> %s by_mnt_id=%s by_devt=%s",
+                            pid, mnt_id or 0, dev, mi, self.by_mnt_id, self.by_devt)
+                return mi
+            return None
 
         res = _lookup()
         if res is not None:
@@ -310,7 +322,7 @@ class MountsMap:
         res = _lookup()
         if res is not None:
             return res
-        logger.warning("No mountpoint found for mnt_id {} devt {}".format(mnt_id or 0, dev))
+        logger.warning("No mountpoint found for pid:{} mnt_id:{} devt:{}".format(pid, mnt_id or 0, dev))
         return None
 
 class PidEnvMap:
