@@ -7,9 +7,8 @@ Provides:       vnfs-collector
 # BuildArch is driven by `rpmbuild --target` (Makefile passes the target
 # arch for per-(python,arch) offline builds, or `noarch` for the legacy
 # single-package online build).
-Requires:       python(abi) >= 3.9 python3-bcc
+Requires:       python(abi) >= 3.9 python3-bcc dwarves
 Requires(post): systemd
-Recommends:     dwarves
 
 %description
 eBPF-based metrics collector that tracks NFS operations per process/mount
