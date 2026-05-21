@@ -14,7 +14,6 @@ import re
 import argparse
 
 import numpy
-import psutil
 import socket
 from threading import Thread
 from datetime import datetime
@@ -244,23 +243,41 @@ class MutableEnvsMixin:
 
 
 class MountsMap:
-    def __init__(self, vaccum_interval=600):
-        self.by_mnt_id = {}
-        self.by_devt = {}
-        self.vaccum_interval = vaccum_interval
-        self.start = datetime.now()
-        self.refresh_map_mountinfo()
+    def __init__(self):
+        # pid (str) -> {"by_mnt_id": {mnt_id: MountInfo}, "by_devt": {devt: MountInfo}}
+        self.pid_maps = {}
+        self.refresh_map_mountinfo("self")
 
     def get_mountinfo(self, pid):
         return f"/proc/{pid}/mountinfo"
 
+    @staticmethod
+    def _pid_key(pid):
+        return str(pid)
+
+    def drop_pid(self, pid):
+        self.pid_maps.pop(self._pid_key(pid), None)
+
+    def vaccum(self):
+        for pid in list(self.pid_maps):
+            if pid == "self":
+                continue
+            if not Path("/proc/%s" % pid).exists():
+                del self.pid_maps[pid]
+        logger.debug("MountsMap: vaccumed pid_maps keys=%s", list(self.pid_maps))
+
     def refresh_map_mountinfo(self, pid="self"):
+        by_mnt_id = {}
+        by_devt = {}
         try:
             mounts = open(self.get_mountinfo(pid)).readlines()
-        except:
-            # pid is gone... open our mountinfo proc file
-            logger.debug(f"MountsMap: pid: {pid} is gone...")
-            mounts = open(self.get_mountinfo("self")).readlines()
+        except OSError:
+            logger.debug("MountsMap: pid %s mountinfo unavailable", pid)
+            self.pid_maps[self._pid_key(pid)] = {
+                "by_mnt_id": by_mnt_id,
+                "by_devt": by_devt,
+            }
+            return
 
         for mount in mounts:
             parts = mount.split()
@@ -272,15 +289,12 @@ class MountsMap:
             if 'nfs' not in fstype:
                 continue
             mi = MountInfo(mountpoint, device)
-            self.by_mnt_id[mnt_id] = mi
-            self.by_devt[devt] = mi
-
-    def refresh_map(self):
-        for p in psutil.disk_partitions(all=True):
-            if 'nfs' not in p.fstype:
-                continue
-            devt = self.devt_to_str(os.stat(p.mountpoint).st_dev)
-            self.by_devt[devt] = MountInfo(p.mountpoint, p.device)
+            by_mnt_id[mnt_id] = mi
+            by_devt[devt] = mi
+        self.pid_maps[self._pid_key(pid)] = {
+            "by_mnt_id": by_mnt_id,
+            "by_devt": by_devt,
+        }
 
     def devt_to_str(self, st_dev):
         MINORBITS = 20
@@ -292,33 +306,40 @@ class MountsMap:
         falling back to superblock device id (major:minor) when mnt_id is absent or unknown.
         """
         dev = self.devt_to_str(sbdev)
+        key = self._pid_key(pid)
 
         def _lookup():
+            maps = self.pid_maps.get(key)
+            if not maps:
+                return None
+            by_mnt_id = maps["by_mnt_id"]
+            by_devt = maps["by_devt"]
             if mnt_id:
-                mi = self.by_mnt_id.get(str(int(mnt_id)))
+                mi = by_mnt_id.get(str(int(mnt_id)))
                 if mi is not None:
-                    logger.debug("mount-resolve pid=%s mnt_id=%s sbdev=%s via=mnt_id -> %s by_mnt_id=%s by_devt=%s",
-                                pid, mnt_id or 0, dev, mi, self.by_mnt_id, self.by_devt)
+                    logger.debug(
+                        "mount-resolve pid=%s mnt_id=%s sbdev=%s via=mnt_id -> %s",
+                        pid, mnt_id or 0, dev, mi,
+                    )
                     return mi
-            mi = self.by_devt.get(dev)
+            mi = by_devt.get(dev)
             if mi is not None:
-                logger.debug("mount-resolve pid=%s mnt_id=%s sbdev=%s via=sbdev -> %s by_mnt_id=%s by_devt=%s",
-                            pid, mnt_id or 0, dev, mi, self.by_mnt_id, self.by_devt)
+                logger.debug(
+                    "mount-resolve pid=%s mnt_id=%s sbdev=%s via=sbdev -> %s",
+                    pid, mnt_id or 0, dev, mi,
+                )
                 return mi
             return None
 
         res = _lookup()
         if res is not None:
             return res
-        if (datetime.now() - self.start).total_seconds() > self.vaccum_interval:
-            self.by_mnt_id = {}
-            self.by_devt = {}
-            self.start = datetime.now()
         self.refresh_map_mountinfo(pid)
         res = _lookup()
         if res is not None:
             return res
-        self.refresh_map()
+        self.refresh_map_mountinfo("self")
+        key = "self"
         res = _lookup()
         if res is not None:
             return res
@@ -330,8 +351,9 @@ class PidEnvMap:
     Map interface of pid and the dictionary of the tracked environment
     variables.
     """
-    def __init__(self, vaccum_interval=600):
+    def __init__(self, vaccum_interval=600, mounts_map=None):
         self.pidmap = {}
+        self.mounts_map = mounts_map
         self.vaccum_interval = vaccum_interval
         self.start = datetime.now()
 
@@ -339,6 +361,10 @@ class PidEnvMap:
         for pid in list(self.pidmap):
             if not Path("/proc/%s/environ" % pid).exists():
                 del self.pidmap[pid]
+                if self.mounts_map:
+                    self.mounts_map.drop_pid(pid)
+        if self.mounts_map:
+            self.mounts_map.vaccum()
         self.start = datetime.now()
         logger.debug("PidEnvMap: vaccumed...")
         logger.debug(self.pidmap)
@@ -349,6 +375,7 @@ class PidEnvMap:
 
     def insert(self, pid, envs):
         self.pidmap[str(pid)] = envs
+        self.mounts_map.refresh_map_mountinfo(pid)
         logger.debug("PidEnvMap: insert pid[%d]" % pid)
         logger.debug(self.pidmap)
 

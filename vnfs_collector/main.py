@@ -294,8 +294,8 @@ async def _exec():
         exit()
 
     bpf = BPF(text=bpf_text)
-    pidEnvMap = PidEnvMap(vaccum_interval=args.vaccum)
-    mountsMap = MountsMap(vaccum_interval=args.vaccum)
+    mountsMap = MountsMap()
+    pidEnvMap = PidEnvMap(vaccum_interval=args.vaccum, mounts_map=mountsMap)
     collector = StatsCollector(
         _args=args,
         bpf=bpf,
