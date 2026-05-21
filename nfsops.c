@@ -324,6 +324,25 @@ static int trace_from_inode_hint(struct pt_regs *ctx, struct inode *inode,
 	return 0;
 }
 
+/*
+ * inode-only NFS hooks with no vfsmount/path and no security_path_lookup on
+ * 4.18 (nfs_do_access, nfs_lookup): no LSM hint; mnt_id=0, userspace sbdev only.
+ * Do not consume mnt_ns_hint (avoids stealing hints for create/unlink/etc.).
+ */
+static int trace_from_inode_sb(struct inode *inode, u64 count)
+{
+	struct start_t *startp = get();
+
+	if (!startp)
+		return 0;
+
+	startp->mnt_id = 0;
+	startp->start = bpf_ktime_get_ns();
+	startp->inode = inode;
+	startp->count = count;
+	return 0;
+}
+
 static int file_read_write(struct pt_regs *ctx, struct file *file,
 		size_t count, int is_read)
 {
@@ -708,7 +727,7 @@ int trace_nfs_symlink_ret(struct pt_regs *ctx)
 int trace_nfs_lookup(struct pt_regs *ctx, struct inode *dir,
 		struct dentry * dentry, unsigned int flags)
 {
-	return trace_from_inode_hint(ctx, dir, 0);
+	return trace_from_inode_sb(dir, 0);
 }
 
 int trace_nfs_lookup_ret(struct pt_regs *ctx)
@@ -753,7 +772,7 @@ int trace_nfs_rename_ret(struct pt_regs *ctx)
 
 int trace_nfs_do_access(struct pt_regs *ctx, struct inode *inode, const struct cred *cred, int mask)
 {
-	return trace_from_inode_hint(ctx, inode, 0);
+	return trace_from_inode_sb(inode, 0);
 }
 
 int trace_nfs_do_access_ret(struct pt_regs *ctx)
