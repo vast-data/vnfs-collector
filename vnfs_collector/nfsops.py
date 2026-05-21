@@ -453,8 +453,10 @@ class StatsCollector(MutableEnvsMixin):
         self.b.attach_kretprobe(event="nfs_unlink", fn_name="trace_nfs_unlink_ret")              # updates unlink errors,duration
         self.b.attach_kprobe(event="nfs_symlink", fn_name="trace_nfs_symlink")                   # updates symlink count
         self.b.attach_kretprobe(event="nfs_symlink", fn_name="trace_nfs_symlink_ret")            # updates symlink errors,duration
-        self.b.attach_kprobe(event="nfs_lookup", fn_name="trace_nfs_lookup")                     # updates lookup count
-        self.b.attach_kretprobe(event="nfs_lookup", fn_name="trace_nfs_lookup_ret")              # updates lookup errors,duration
+        self.b.attach_kprobe(event="nfs_lookup_revalidate", fn_name="trace_nfs_lookup")          # updates lookup count
+        self.b.attach_kretprobe(event="nfs_lookup_revalidate", fn_name="trace_nfs_lookup_ret")   # updates lookup errors,duration
+        self.b.attach_kprobe(event="nfs4_lookup_revalidate", fn_name="trace_nfs_lookup")         # updates lookup count
+        self.b.attach_kretprobe(event="nfs4_lookup_revalidate", fn_name="trace_nfs_lookup_ret")  # updates lookup errors,duration
         self.b.attach_kprobe(event="nfs_rename", fn_name="trace_nfs_rename")                     # updates rename count
         self.b.attach_kretprobe(event="nfs_rename", fn_name="trace_nfs_rename_ret")              # updates rename errors,duration
         self.b.attach_kprobe(event="nfs_do_access", fn_name="trace_nfs_do_access")               # updates access
