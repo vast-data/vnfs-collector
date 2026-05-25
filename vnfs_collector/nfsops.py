@@ -243,9 +243,10 @@ class MutableEnvsMixin:
 
 
 class MountsMap:
-    def __init__(self):
+    def __init__(self, mnt_id_segmentation=True):
         # pid (str) -> {"by_mnt_id": {mnt_id: MountInfo}, "by_devt": {devt: MountInfo}}
         self.pid_maps = {}
+        self.mnt_id_segmentation = mnt_id_segmentation
         self.refresh_map_mountinfo("self")
 
     def get_mountinfo(self, pid):
@@ -302,8 +303,8 @@ class MountsMap:
 
     def get_mountpoint(self, mnt_id, sbdev, pid="self"):
         """
-        Resolve NFS mount metadata using mountinfo mount id (kernel struct mount::mnt_id),
-        falling back to superblock device id (major:minor) when mnt_id is absent or unknown.
+        Resolve NFS mount metadata. With mnt_id_segmentation, prefer mountinfo mount id
+        (struct mount::mnt_id) then sbdev; otherwise sbdev (major:minor) only.
         """
         dev = self.devt_to_str(sbdev)
         key = self._pid_key(pid)
@@ -314,20 +315,14 @@ class MountsMap:
                 return None
             by_mnt_id = maps["by_mnt_id"]
             by_devt = maps["by_devt"]
-            if mnt_id:
+            if self.mnt_id_segmentation and mnt_id:
                 mi = by_mnt_id.get(str(int(mnt_id)))
                 if mi is not None:
-                    logger.debug(
-                        "mount-resolve pid=%s mnt_id=%s sbdev=%s via=mnt_id -> %s",
-                        pid, mnt_id or 0, dev, mi,
-                    )
+                    logger.debug(f"mount-resolve pid={pid} mnt_id={mnt_id or 0} sbdev={dev} via=mnt_id -> {mi}")
                     return mi
             mi = by_devt.get(dev)
             if mi is not None:
-                logger.debug(
-                    "mount-resolve pid=%s mnt_id=%s sbdev=%s via=sbdev -> %s",
-                    pid, mnt_id or 0, dev, mi,
-                )
+                logger.debug(f"mount-resolve pid={pid} mnt_id={mnt_id or 0} sbdev={dev} via=sbdev -> {mi}")
                 return mi
             return None
 
@@ -429,12 +424,14 @@ class StatsCollector(MutableEnvsMixin):
     Tracer traps pid execution and collects the existance of the tracked
     environment variables.
     """
-    def __init__(self, _args, bpf, pid_env_map, mounts_map, use_mnt_id_attribution=True):
+    def __init__(self, _args, bpf, pid_env_map, mounts_map,
+                 use_mnt_id_attribution=True, track_lookup_access=True):
         super().__init__(_args)
         self.b = bpf
         self.pid_env_map = pid_env_map
         self.mounts_map = mounts_map
         self.use_mnt_id_attribution = use_mnt_id_attribution
+        self.track_lookup_access = track_lookup_access
         self.hostname = os.getenv("HOSTNAME", socket.gethostname())
         # check whether hash table batch ops is supported
         try:
@@ -492,14 +489,15 @@ class StatsCollector(MutableEnvsMixin):
         self.b.attach_kretprobe(event="nfs_unlink", fn_name="trace_nfs_unlink_ret")              # updates unlink errors,duration
         self.b.attach_kprobe(event="nfs_symlink", fn_name="trace_nfs_symlink")                   # updates symlink count
         self.b.attach_kretprobe(event="nfs_symlink", fn_name="trace_nfs_symlink_ret")            # updates symlink errors,duration
-        self.b.attach_kprobe(event="nfs_lookup_revalidate", fn_name="trace_nfs_lookup")          # updates lookup count
-        self.b.attach_kretprobe(event="nfs_lookup_revalidate", fn_name="trace_nfs_lookup_ret")   # updates lookup errors,duration
-        self.b.attach_kprobe(event="nfs4_lookup_revalidate", fn_name="trace_nfs_lookup")         # updates lookup count
-        self.b.attach_kretprobe(event="nfs4_lookup_revalidate", fn_name="trace_nfs_lookup_ret")  # updates lookup errors,duration
+        if self.track_lookup_access:
+            self.b.attach_kprobe(event="nfs_lookup_revalidate", fn_name="trace_nfs_lookup")          # updates lookup count
+            self.b.attach_kretprobe(event="nfs_lookup_revalidate", fn_name="trace_nfs_lookup_ret")   # updates lookup errors,duration
+            self.b.attach_kprobe(event="nfs4_lookup_revalidate", fn_name="trace_nfs_lookup")         # updates lookup count
+            self.b.attach_kretprobe(event="nfs4_lookup_revalidate", fn_name="trace_nfs_lookup_ret")  # updates lookup errors,duration
+            self.b.attach_kprobe(event="nfs_do_access", fn_name="trace_nfs_do_access")               # updates access
+            self.b.attach_kretprobe(event="nfs_do_access", fn_name="trace_nfs_do_access_ret")        # updates access errors,duration
         self.b.attach_kprobe(event="nfs_rename", fn_name="trace_nfs_rename")                     # updates rename count
         self.b.attach_kretprobe(event="nfs_rename", fn_name="trace_nfs_rename_ret")              # updates rename errors,duration
-        self.b.attach_kprobe(event="nfs_do_access", fn_name="trace_nfs_do_access")               # updates access
-        self.b.attach_kretprobe(event="nfs_do_access", fn_name="trace_nfs_do_access_ret")        # updates access errors,duration
         self.b.attach_kprobe(event="nfs_mkdir", fn_name="trace_nfs_mkdir")                       # updates mkdir count
         self.b.attach_kretprobe(event="nfs_mkdir", fn_name="trace_nfs_mkdir_ret")                # updates mkdir errors,duration
         self.b.attach_kprobe(event="nfs_rmdir", fn_name="trace_nfs_rmdir")                       # updates rmdir count

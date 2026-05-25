@@ -282,6 +282,39 @@ vnfs-collector -d prometheus -i 5 --sink-batch-size 6
 
 Default is `--sink-batch-size 1` (no batching, send immediately after each collection).
 
+#### Mount attribution
+
+**`--mnt-id-segmentation`** (default: `true`): When enabled, the BPF program reads
+per-mount IDs from the kernel, resolves mount points via `/proc/<pid>/mountinfo`,
+and attaches `security_path_*` LSM probes so inode-only NFS operations (create,
+unlink, mkdir, etc.) can be tied to a mount. When disabled, aggregation and
+resolution use superblock device id (`sbdev`, `major:minor` from mountinfo column 3)
+only; `security_path_*` probes are not attached. Use `false` only if you accept
+coarser attribution when multiple NFS mounts share one superblock or you know
+that your NFS mounts do not share the same fsid.
+
+**`--track-lookup-access`** (default: `true`): When enabled, `nfs_lookup` and
+`nfs_do_access` are traced. When disabled, those probes are not loaded. Lookup and
+access counters use inode/sbdev attribution only and are **ambiguous** when several
+mount points share the same superblock; disable if you do not need these metrics or
+your mounts do not share `sbdev`.
+
+Example (sbdev-only, no lookup/access):
+
+```bash
+vnfs-collector -d file --mnt-id-segmentation false --track-lookup-access false
+```
+
+YAML:
+
+```yaml
+mnt_id_segmentation: true
+track_lookup_access: true
+interval: 5
+file:
+  samples_path: /opt/vnfs-collector/vnfs-collector.log
+```
+
 #### File Driver
 The file driver stores collected statistics in a local file. It provides the following configuration options:
 

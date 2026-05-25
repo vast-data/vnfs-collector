@@ -132,6 +132,14 @@ def test_refresh_map_mountinfo():
 
 
 @patch.object(MountsMap, "get_mountinfo", MagicMock(return_value=f"{ROOT}/data/mounts_self"))
+def test_get_mountpoint_ignores_mnt_id_when_segmentation_disabled():
+    mounts_map = MountsMap(mnt_id_segmentation=False)
+    assert mounts_map.get_mountpoint(2585, 999, "self") is None
+    mount_info = mounts_map.get_mountpoint(2585, 321, "self")
+    assert mount_info.mountpoint == "/mnt/test"
+
+
+@patch.object(MountsMap, "get_mountinfo", MagicMock(return_value=f"{ROOT}/data/mounts_self"))
 def test_get_mountpoint_sbdev_fallback():
     mounts_map = MountsMap()
     mount_info1 = mounts_map.get_mountpoint(0, 321, "self")
@@ -201,6 +209,29 @@ def test_mounts_map_vaccum_drops_dead_pid(*_):
 
     assert "162148" not in mounts_map.pid_maps
     assert "self" in mounts_map.pid_maps
+
+
+@patch("vnfs_collector.nfsops.BPF")
+def test_stats_collector_attach_respects_flags(mock_bpf):
+    from vnfs_collector.nfsops import StatsCollector
+
+    mock_bpf.get_kprobe_functions.return_value = []
+    bpf = mock_bpf.return_value
+    collector = StatsCollector(
+        MagicMock(),
+        bpf,
+        MagicMock(),
+        MagicMock(),
+        use_mnt_id_attribution=False,
+        track_lookup_access=False,
+    )
+    collector.attach()
+
+    attached = [c.kwargs["event"] for c in bpf.attach_kprobe.call_args_list]
+    assert "nfs_do_access" not in attached
+    assert "nfs_lookup_revalidate" not in attached
+    assert "security_path_mkdir" not in attached
+    assert "nfs_file_read" in attached
 
 
 def test_anonymize_valid_fields(data):
