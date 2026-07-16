@@ -738,7 +738,7 @@ int trace_nfs_lookup_ret(struct pt_regs *ctx)
 		return 0;
 
 	statsp->lookup.count++;
-	if (PT_REGS_RC(ctx))
+	if (PT_REGS_RC(ctx) < 0)
 		statsp->lookup.errors++;
 	statsp->lookup.duration += bpf_ktime_get_ns() - start;
 	return 0;
