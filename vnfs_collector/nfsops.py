@@ -256,16 +256,14 @@ class MountsMap:
     def _pid_key(pid):
         return str(pid)
 
-    def drop_pid(self, pid):
-        self.pid_maps.pop(self._pid_key(pid), None)
-
-    def vaccum(self):
+    def purge_stale_pids(self):
+        """Drop mount caches for processes that no longer exist."""
         for pid in list(self.pid_maps):
             if pid == "self":
                 continue
             if not Path("/proc/%s" % pid).exists():
                 del self.pid_maps[pid]
-        logger.debug("MountsMap: vaccumed pid_maps keys=%s", list(self.pid_maps))
+        logger.debug("MountsMap: purged stale pids, remaining=%s", list(self.pid_maps))
 
     def refresh_map_mountinfo(self, pid="self"):
         by_mnt_id = {}
@@ -346,7 +344,7 @@ class PidEnvMap:
     Map interface of pid and the dictionary of the tracked environment
     variables.
     """
-    def __init__(self, vaccum_interval=600, mounts_map=None):
+    def __init__(self, mounts_map, vaccum_interval=600):
         self.pidmap = {}
         self.mounts_map = mounts_map
         self.vaccum_interval = vaccum_interval
@@ -356,10 +354,7 @@ class PidEnvMap:
         for pid in list(self.pidmap):
             if not Path("/proc/%s/environ" % pid).exists():
                 del self.pidmap[pid]
-                if self.mounts_map:
-                    self.mounts_map.drop_pid(pid)
-        if self.mounts_map:
-            self.mounts_map.vaccum()
+        self.mounts_map.purge_stale_pids()
         self.start = datetime.now()
         logger.debug("PidEnvMap: vaccumed...")
         logger.debug(self.pidmap)

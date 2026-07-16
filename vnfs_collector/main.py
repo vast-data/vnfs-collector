@@ -316,7 +316,7 @@ async def _exec():
     bpf = BPF(text=bpf_text)
     use_mnt_id_attribution = mnt_id_segmentation and use_mnt_id_bpf
     mountsMap = MountsMap(mnt_id_segmentation=use_mnt_id_attribution)
-    pidEnvMap = PidEnvMap(vaccum_interval=args.vaccum, mounts_map=mountsMap)
+    pidEnvMap = PidEnvMap(mounts_map=mountsMap, vaccum_interval=args.vaccum)
     collector = StatsCollector(
         _args=args,
         bpf=bpf,

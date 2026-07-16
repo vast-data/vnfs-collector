@@ -190,7 +190,7 @@ def test_get_mount_info_from_different_mountinfo_files(*_):
 
 
 @patch.object(MountsMap, "get_mountinfo", side_effect=_mountinfo_side_effect)
-def test_mounts_map_vaccum_drops_dead_pid(*_):
+def test_mounts_map_purge_stale_pids(*_):
     from pathlib import Path
 
     mounts_map = MountsMap()
@@ -205,7 +205,7 @@ def test_mounts_map_vaccum_drops_dead_pid(*_):
         return real_exists(self)
 
     with patch.object(Path, "exists", exists):
-        mounts_map.vaccum()
+        mounts_map.purge_stale_pids()
 
     assert "162148" not in mounts_map.pid_maps
     assert "self" in mounts_map.pid_maps
