@@ -12,6 +12,7 @@
 import os
 import re
 import argparse
+import time
 
 import numpy
 import socket
@@ -354,7 +355,6 @@ class PidEnvMap:
         for pid in list(self.pidmap):
             if not Path("/proc/%s/environ" % pid).exists():
                 del self.pidmap[pid]
-        self.mounts_map.purge_stale_pids()
         self.start = datetime.now()
         logger.debug("PidEnvMap: vaccumed...")
         logger.debug(self.pidmap)
@@ -382,36 +382,70 @@ class PidEnvMap:
                 return self.pidmap[str(pid)]
             return {}
 
+
 class EnvTracer(MutableEnvsMixin):
     """
     Tracer traps pid execution and collects the existance of the tracked
-    environment variables.
+    environment variables. Polling/vacuum are owned by MaintenanceScheduler.
     """
     def __init__(self, _args, bpf, pid_env_map):
         super().__init__(_args)
         self.b = bpf
         self.pid_env_map = pid_env_map
 
-    def start(self):
-        self.b["events"].open_perf_buffer(self.get_process_envs)
-        self.t = Thread(target=self.trace_pid_exec)
-        self.t.daemon = True
-        self.t.start()
-
     def attach(self):
+        self.b["events"].open_perf_buffer(self.get_process_envs)
         if self.envs:
             self.b.attach_kprobe(event=self.b.get_syscall_fnname("execve"), fn_name="trace_execve")
 
-    def trace_pid_exec(self):
-        while True:
-            self.b.perf_buffer_poll()
-            self.pid_env_map.vaccum_if_needed()
+    def poll(self, timeout_ms):
+        self.b.perf_buffer_poll(timeout=timeout_ms)
 
     def get_process_envs(self, cpu, data, size):
         data = self.b["events"].event(data)
         envs = get_pid_envs(data.pid, self.envs)
         if envs:
             self.pid_env_map.insert(data.pid, envs)
+
+
+class MaintenanceScheduler:
+    """
+    Owns the background thread for optional EnvTracer polling and periodic
+    vacuum of PidEnvMap / MountsMap. MountsMap purge always runs; env-map
+    vacuum runs only when EnvTracer is enabled.
+    """
+    # Wake often enough for env events; mounts/env vacuum still gated by interval.
+    _POLL_TIMEOUT_MS = 1000
+    _SLEEP_TIMEOUT = 10
+
+    def __init__(self, mounts_map, pid_env_map, vaccum_interval=600, env_tracer=None):
+        self.mounts_map = mounts_map
+        self.pid_env_map = pid_env_map
+        self.vaccum_interval = vaccum_interval
+        self.env_tracer = env_tracer
+        self._mounts_start = datetime.now()
+        self._thread = None
+
+    def start(self):
+        if self.env_tracer:
+            self.env_tracer.attach()
+        self._thread = Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _purge_mounts_if_needed(self):
+        if (datetime.now() - self._mounts_start).total_seconds() > self.vaccum_interval:
+            self.mounts_map.purge_stale_pids()
+            self._mounts_start = datetime.now()
+
+    def _run(self):
+        while True:
+            if self.env_tracer:
+                self.env_tracer.poll(timeout_ms=self._POLL_TIMEOUT_MS)
+                self.pid_env_map.vaccum_if_needed()
+            else:
+                time.sleep(self._SLEEP_TIMEOUT)
+            self._purge_mounts_if_needed()
+
 
 
 class StatsCollector(MutableEnvsMixin):

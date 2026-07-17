@@ -28,7 +28,14 @@ from vnfs_collector.utils import (
     maybe_bool_parse,
     flatten_keys,
 )
-from vnfs_collector.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTracer, logger
+from vnfs_collector.nfsops import (
+    StatsCollector,
+    PidEnvMap,
+    MountsMap,
+    EnvTracer,
+    MaintenanceScheduler,
+    logger,
+)
 from vnfs_collector.bpf_mount_offsets import vfsmount_to_mnt_id_delta
 
 urllib3.disable_warnings()
@@ -149,7 +156,7 @@ conf_parser.add_argument(
 )
 conf_parser.add_argument(
     "-v", "--vaccum", default=600, type=int,
-    help="Pid env map vaccum interval, in seconds."
+    help="Interval in seconds to remove exited process entries from mount and env maps."
 )
 conf_parser.add_argument(
     "-e", "--envs", type=maybe_list_parse,
@@ -354,11 +361,15 @@ async def _exec():
         on_exit()
 
     if not stop_event.is_set():
-        # if no envs are given, no need to track
+        env_tracer = None
         if args.envs_from_vdb_schema or args.envs:
-            envTracer = EnvTracer(_args=args, bpf=bpf, pid_env_map=pidEnvMap)
-            envTracer.attach()
-            envTracer.start()
+            env_tracer = EnvTracer(_args=args, bpf=bpf, pid_env_map=pidEnvMap)
+        MaintenanceScheduler(
+            mounts_map=mountsMap,
+            pid_env_map=pidEnvMap,
+            vaccum_interval=args.vaccum,
+            env_tracer=env_tracer,
+        ).start()
 
         # probe needed modules (nfsv4 autoloads nfs)
         subprocess.run(["modprobe", "kheaders"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

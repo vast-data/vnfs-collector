@@ -9,6 +9,8 @@ from vnfs_collector.nfsops import (
     anonymize_stats,
     MountInfo,
     MountsMap,
+    PidEnvMap,
+    MaintenanceScheduler,
 )
 from tests.conftest import ROOT
 
@@ -209,6 +211,51 @@ def test_mounts_map_purge_stale_pids(*_):
 
     assert "162148" not in mounts_map.pid_maps
     assert "self" in mounts_map.pid_maps
+
+
+def test_maintenance_scheduler_purges_mounts_without_env_tracer():
+    from pathlib import Path
+
+    mounts_map = MountsMap()
+    mounts_map.pid_maps["162148"] = {"by_mnt_id": {}, "by_devt": {}}
+    pid_env_map = PidEnvMap(mounts_map=mounts_map, vaccum_interval=60)
+    scheduler = MaintenanceScheduler(
+        mounts_map=mounts_map,
+        pid_env_map=pid_env_map,
+        vaccum_interval=60,
+        env_tracer=None,
+    )
+
+    real_exists = Path.exists
+
+    def exists(self):
+        if str(self) == "/proc/162148":
+            return False
+        return real_exists(self)
+
+    with patch.object(Path, "exists", exists):
+        scheduler._purge_mounts_if_needed()
+        assert "162148" in mounts_map.pid_maps
+
+        scheduler._mounts_start = datetime.datetime.now() - datetime.timedelta(seconds=61)
+        scheduler._purge_mounts_if_needed()
+
+    assert "162148" not in mounts_map.pid_maps
+    assert "self" in mounts_map.pid_maps
+
+
+def test_pid_env_map_vaccum_does_not_purge_mounts():
+    mounts_map = MountsMap()
+    mounts_map.pid_maps["162148"] = {"by_mnt_id": {}, "by_devt": {}}
+    pid_env_map = PidEnvMap(mounts_map=mounts_map, vaccum_interval=60)
+    pid_env_map.pidmap["162148"] = {"JOBID": "1"}
+
+    with patch.object(mounts_map, "purge_stale_pids") as purge:
+        with patch("vnfs_collector.nfsops.Path") as mock_path:
+            mock_path.return_value.exists.return_value = False
+            pid_env_map.vaccum()
+        purge.assert_not_called()
+    assert "162148" not in pid_env_map.pidmap
 
 
 @patch("vnfs_collector.nfsops.BPF")
