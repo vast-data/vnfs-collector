@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Version 1.6
+* fixed per-mount stats when multiple mounts share the same fsid
+* Added offline make target for pkg install without internet access
+* few fixes to wrong ebpf kprobes
+* add TruffleHog scanning
+* fixed wrong perms for nfsops.yaml file
+* support python >3.12
+* fixed support for tag-filters when envs come from vdb schema
+
 ## Version 1.5
 * fixed prometheus sink driver to present the latest sample as read-only
   and not clear it, causing misses for additional scrapes

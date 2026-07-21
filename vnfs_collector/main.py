@@ -28,7 +28,14 @@ from vnfs_collector.utils import (
     maybe_bool_parse,
     flatten_keys,
 )
-from vnfs_collector.nfsops import StatsCollector, PidEnvMap, MountsMap, EnvTracer, logger
+from vnfs_collector.nfsops import (
+    StatsCollector,
+    PidEnvMap,
+    MountsMap,
+    EnvTracer,
+    MaintenanceScheduler,
+    logger,
+)
 from vnfs_collector.bpf_mount_offsets import vfsmount_to_mnt_id_delta
 
 urllib3.disable_warnings()
@@ -149,7 +156,7 @@ conf_parser.add_argument(
 )
 conf_parser.add_argument(
     "-v", "--vaccum", default=600, type=int,
-    help="Pid env map vaccum interval, in seconds."
+    help="Interval in seconds to remove exited process entries from mount and env maps."
 )
 conf_parser.add_argument(
     "-e", "--envs", type=maybe_list_parse,
@@ -179,6 +186,19 @@ conf_parser.add_argument(
     help="Learn environment variables from the VDB schema instead of user input. "
          "The collector identifies columns in the schema with the format 'ENV_<name>'\n"
          " and treats '<name>' as an environment variable. Cannot be used with user-provided envs."
+)
+conf_parser.add_argument(
+    "--mnt-id-segmentation", type=maybe_bool_parse, default=True,
+    help="When true (default), read mount IDs from the kernel and resolve mounts via "
+         "/proc/<pid>/mountinfo (mnt_id, then sbdev). Attach security_path LSM probes for "
+         "inode-only NFS ops. When false, stats and mount resolution use superblock device "
+         "id (sbdev) only; security_path probes are not attached."
+)
+conf_parser.add_argument(
+    "--track-lookup-access", type=maybe_bool_parse, default=True,
+    help="When true (default), trace nfs_lookup and nfs_do_access. When false, those probes "
+         "are not attached. Lookup/access attribution is ambiguous when several NFS mounts "
+         "share the same superblock (major:minor); disable if you do not need these counters."
 )
 conf_parser.add_argument(
     "--vdb-schema-refresh-interval",
@@ -254,6 +274,8 @@ async def _exec():
         ("anon-fields", args.anon_fields),
         ("config", args.cfg),
         ("envs-from-vdb-schema", args.envs_from_vdb_schema),
+        ("mnt-id-segmentation", args.mnt_id_segmentation),
+        ("track-lookup-access", args.track_lookup_access),
     ]
     if args.envs_from_vdb_schema:
         display_options.append(("vdb-schema-refresh-interval", args.vdb_schema_refresh_interval))
@@ -265,17 +287,22 @@ async def _exec():
     # read BPF program text
     with BASE_PATH.joinpath("nfsops.c").open() as f:
         bpf_text = f.read()
-    use_mnt_id = True
-    try:
-        _mnt_delta = vfsmount_to_mnt_id_delta()
-    except Exception as e:
-        use_mnt_id = False
+
+    mnt_id_segmentation = args.mnt_id_segmentation
+    use_mnt_id_bpf = mnt_id_segmentation
+    if mnt_id_segmentation:
+        try:
+            _mnt_delta = vfsmount_to_mnt_id_delta()
+        except Exception as e:
+            use_mnt_id_bpf = False
+            _mnt_delta = 0
+            logger.warning(f"Mount-id segmentation requested but disabled in BPF (sbdev only): {e}")
+    else:
         _mnt_delta = 0
-        logger.warning(
-            "Mount-id attribution disabled (mnt_id=0; using superblock dev only): %s",
-            e,
-        )
-    if use_mnt_id:
+        use_mnt_id_bpf = False
+        logger.info("Mount-id segmentation disabled; using superblock device id only")
+
+    if use_mnt_id_bpf:
         bpf_text = (
             f"#define MOUNT_MNT_TO_MNT_ID_DELTA {_mnt_delta}\n"
             "#define MOUNT_MNT_ID_DISABLED 0\n"
@@ -294,14 +321,16 @@ async def _exec():
         exit()
 
     bpf = BPF(text=bpf_text)
-    pidEnvMap = PidEnvMap(vaccum_interval=args.vaccum)
-    mountsMap = MountsMap(vaccum_interval=args.vaccum)
+    use_mnt_id_attribution = mnt_id_segmentation and use_mnt_id_bpf
+    mountsMap = MountsMap(mnt_id_segmentation=use_mnt_id_attribution)
+    pidEnvMap = PidEnvMap(mounts_map=mountsMap, vaccum_interval=args.vaccum)
     collector = StatsCollector(
         _args=args,
         bpf=bpf,
         pid_env_map=pidEnvMap,
         mounts_map=mountsMap,
-        use_mnt_id_attribution=use_mnt_id,
+        use_mnt_id_attribution=use_mnt_id_attribution,
+        track_lookup_access=args.track_lookup_access,
     )
     mgr = NamedExtensionManager(
         namespace=ENTRYPOINT_GROUP,
@@ -332,11 +361,15 @@ async def _exec():
         on_exit()
 
     if not stop_event.is_set():
-        # if no envs are given, no need to track
+        env_tracer = None
         if args.envs_from_vdb_schema or args.envs:
-            envTracer = EnvTracer(_args=args, bpf=bpf, pid_env_map=pidEnvMap)
-            envTracer.attach()
-            envTracer.start()
+            env_tracer = EnvTracer(_args=args, bpf=bpf, pid_env_map=pidEnvMap)
+        MaintenanceScheduler(
+            mounts_map=mountsMap,
+            pid_env_map=pidEnvMap,
+            vaccum_interval=args.vaccum,
+            env_tracer=env_tracer,
+        ).start()
 
         # probe needed modules (nfsv4 autoloads nfs)
         subprocess.run(["modprobe", "kheaders"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

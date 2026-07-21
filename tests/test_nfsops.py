@@ -9,6 +9,8 @@ from vnfs_collector.nfsops import (
     anonymize_stats,
     MountInfo,
     MountsMap,
+    PidEnvMap,
+    MaintenanceScheduler,
 )
 from tests.conftest import ROOT
 
@@ -113,89 +115,42 @@ def test_remote_path(addr, remote_path):
     assert mount_info.remote_path == remote_path
 
 
-mountpoint_to_dev = {
-    '/mnt/test1': 123456,
-    '/mnt/test2': 654321
-}
-
-def fake_os_stat(mountpoint):
-    """Define fake_os_stat to return different st_dev values based on mountpoint"""
-    st_dev = mountpoint_to_dev.get(mountpoint, 0)  # Default to 0 if not found
-    return MagicMock(st_dev=st_dev)
-
-
-fake_disk_partitions = [
-    MagicMock(fstype='nfs', mountpoint='/mnt/test1', device='172.17.0.1:/mnt/test1'),
-    MagicMock(fstype='nfs', mountpoint='/mnt/test2', device='172.17.0.2:/mnt/test2'),
-]
-
-
-@patch('psutil.disk_partitions', MagicMock(return_value=fake_disk_partitions))
-@patch('os.stat', side_effect=lambda mountpoint: fake_os_stat(mountpoint))
-def test_refresh_map(mock_stat):
+@patch.object(MountsMap, "get_mountinfo", MagicMock(return_value=f"{ROOT}/data/mounts_self"))
+def test_refresh_map_mountinfo():
     mounts_map = MountsMap()
-    mounts_map.refresh_map()
-
-    devt1 = mounts_map.devt_to_str(123456)
-    devt2 = mounts_map.devt_to_str(654321)
-
-    assert devt1 in mounts_map.by_devt
-    assert devt2 in mounts_map.by_devt
-
-    assert mounts_map.by_devt[devt1].mountpoint == '/mnt/test1'
-    assert mounts_map.by_devt[devt1].device == '172.17.0.1:/mnt/test1'
-
-    assert mounts_map.by_devt[devt2].mountpoint == '/mnt/test2'
-    assert mounts_map.by_devt[devt2].device == '172.17.0.2:/mnt/test2'
-
-
-@patch('psutil.disk_partitions', MagicMock(return_value=fake_disk_partitions))
-@patch('os.stat', side_effect=lambda mountpoint: fake_os_stat(mountpoint))
-def test_get_mountpoint(mock_stat):
-
-    mounts_map = MountsMap()
-    devt1 = mounts_map.devt_to_str(123456)
-    devt2 = mounts_map.devt_to_str(654321)
-
-    mount_info1 = mounts_map.get_mountpoint(0, 123456)
-    mount_info2 = mounts_map.get_mountpoint(0, 654321)
-
-    assert isinstance(mount_info1, MountInfo)
-    assert mount_info1.mountpoint == '/mnt/test1'
-    assert mount_info1.device == '172.17.0.1:/mnt/test1'
-
-    assert isinstance(mount_info2, MountInfo)
-    assert mount_info2.mountpoint == '/mnt/test2'
-    assert mount_info2.device == '172.17.0.2:/mnt/test2'
+    mounts_map.refresh_map_mountinfo("self")
+    by_mnt_id = mounts_map.pid_maps["self"]["by_mnt_id"]
+    by_devt = mounts_map.pid_maps["self"]["by_devt"]
+    assert len(by_mnt_id) == 2
+    assert len(by_devt) == 2
+    assert "2585" in by_mnt_id
+    assert "446" in by_mnt_id
+    assert "0:321" in by_devt
+    assert "0:69" in by_devt
+    assert by_mnt_id["2585"].mountpoint == "/mnt/test"
+    assert by_mnt_id["446"].mountpoint == "/mnt/test2"
+    assert by_devt["0:321"].device == "172.17.0.3:/"
+    assert by_devt["0:69"].device == "172.17.0.2:/"
 
 
 @patch.object(MountsMap, "get_mountinfo", MagicMock(return_value=f"{ROOT}/data/mounts_self"))
-@patch.object(MountsMap, "refresh_map", MagicMock())
-def test_refresh_map_mountinfo():
+def test_get_mountpoint_ignores_mnt_id_when_segmentation_disabled():
+    mounts_map = MountsMap(mnt_id_segmentation=False)
+    assert mounts_map.get_mountpoint(2585, 999, "self") is None
+    mount_info = mounts_map.get_mountpoint(2585, 321, "self")
+    assert mount_info.mountpoint == "/mnt/test"
+
+
+@patch.object(MountsMap, "get_mountinfo", MagicMock(return_value=f"{ROOT}/data/mounts_self"))
+def test_get_mountpoint_sbdev_fallback():
     mounts_map = MountsMap()
-    mounts_map.refresh_map_mountinfo()
-    assert len(mounts_map.by_mnt_id) == 2
-    assert len(mounts_map.by_devt) == 2
-    assert "2585" in mounts_map.by_mnt_id
-    assert "446" in mounts_map.by_mnt_id
-    assert "0:321" in mounts_map.by_devt
-    assert "0:69" in mounts_map.by_devt
-    assert mounts_map.by_mnt_id["2585"].mountpoint == "/mnt/test"
-    assert mounts_map.by_mnt_id["446"].mountpoint == "/mnt/test2"
-    assert mounts_map.by_devt["0:321"].device == "172.17.0.3:/"
-    assert mounts_map.by_devt["0:69"].device == "172.17.0.2:/"
+    mount_info1 = mounts_map.get_mountpoint(0, 321, "self")
+    mount_info2 = mounts_map.get_mountpoint(0, 69, "self")
 
-
-@patch('psutil.disk_partitions')
-@patch('os.stat', side_effect=lambda mountpoint: fake_os_stat(mountpoint))
-def test_get_mountpoint_with_missing_device(mock_stat, mock_disk_partitions):
-    mock_disk_partitions.return_value = []
-
-    mounts_map = MountsMap()
-    devt = mounts_map.devt_to_str(123456)
-    mount_info = mounts_map.get_mountpoint(0, 123456)
-
-    assert mount_info is None
+    assert mount_info1.mountpoint == "/mnt/test"
+    assert mount_info1.device == "172.17.0.3:/"
+    assert mount_info2.mountpoint == "/mnt/test2"
+    assert mount_info2.device == "172.17.0.2:/"
 
 
 def _mountinfo_side_effect(pid):
@@ -209,46 +164,121 @@ def _mountinfo_side_effect(pid):
 
 
 @patch.object(MountsMap, "get_mountinfo", side_effect=_mountinfo_side_effect)
-@patch.object(MountsMap, "refresh_map",  MagicMock())
 def test_get_mount_info_from_different_mountinfo_files(*_):
     mounts_map = MountsMap()
     mount_info = mounts_map.get_mountpoint(2585, 321, "self")
     assert mount_info.remote_path == "/"
     assert mount_info.mountpoint == "/mnt/test"
-    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446'}
-    assert set(mounts_map.by_devt.keys()) == {'0:321', '0:69'}
+    assert set(mounts_map.pid_maps["self"]["by_mnt_id"]) == {'2585', '446'}
+    assert set(mounts_map.pid_maps["self"]["by_devt"]) == {'0:321', '0:69'}
 
     # Doesn't exist in mounts_self file (sbdev-only lookup misses too)
     mount_info = mounts_map.get_mountpoint(0, 420, "self")
     assert mount_info is None
-    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446'}
-    assert set(mounts_map.by_devt.keys()) == {'0:321', '0:69'}
+    assert set(mounts_map.pid_maps["self"]["by_mnt_id"]) == {'2585', '446'}
 
     mount_info = mounts_map.get_mountpoint(3518, 420, "162148")
     assert mount_info.remote_path == "/remote"
     assert mount_info.mountpoint == "/mnt/mydir"
-    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446', '3518'}
-    assert set(mounts_map.by_devt.keys()) == {'0:420', '0:321', '0:69'}
+    assert set(mounts_map.pid_maps["162148"]["by_mnt_id"]) == {'3518'}
+    assert "162149" not in mounts_map.pid_maps
 
-    # No changes as well. 162149 is pointed to the same mount id / devt
-    mount_info = mounts_map.get_mountpoint(3518, 420, "162149")
-    assert mount_info.remote_path == "/remote"
-    assert mount_info.mountpoint == "/mnt/mydir"
-    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446', '3518'}
-    assert set(mounts_map.by_devt.keys()) == {'0:420', '0:321', '0:69'}
-
-    # Reset vacuum timeout
-    mounts_map.start = datetime.datetime(2000, 1, 1)
-    # Wrong devt. It should cause resetting the map
-    mount_info = mounts_map.get_mountpoint(0, 421, "self")
-    assert mount_info is None
-    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446'}
-    assert set(mounts_map.by_devt.keys()) == {'0:321', '0:69'}
+    # Same mnt_id/devt, different mount namespace -> separate per-pid maps
     mount_info = mounts_map.get_mountpoint(3518, 420, "162149")
     assert mount_info.remote_path == "/remote"
     assert mount_info.mountpoint == "/mnt/mydir2"
-    assert set(mounts_map.by_mnt_id.keys()) == {'2585', '446', '3518'}
-    assert set(mounts_map.by_devt.keys()) == {'0:420', '0:321', '0:69'}
+    assert mounts_map.pid_maps["162148"]["by_mnt_id"]["3518"].mountpoint == "/mnt/mydir"
+    assert mounts_map.pid_maps["162149"]["by_mnt_id"]["3518"].mountpoint == "/mnt/mydir2"
+
+
+@patch.object(MountsMap, "get_mountinfo", side_effect=_mountinfo_side_effect)
+def test_mounts_map_purge_stale_pids(*_):
+    from pathlib import Path
+
+    mounts_map = MountsMap()
+    mounts_map.get_mountpoint(3518, 420, "162148")
+    assert "162148" in mounts_map.pid_maps
+
+    real_exists = Path.exists
+
+    def exists(self):
+        if str(self) == "/proc/162148":
+            return False
+        return real_exists(self)
+
+    with patch.object(Path, "exists", exists):
+        mounts_map.purge_stale_pids()
+
+    assert "162148" not in mounts_map.pid_maps
+    assert "self" in mounts_map.pid_maps
+
+
+def test_maintenance_scheduler_purges_mounts_without_env_tracer():
+    from pathlib import Path
+
+    mounts_map = MountsMap()
+    mounts_map.pid_maps["162148"] = {"by_mnt_id": {}, "by_devt": {}}
+    pid_env_map = PidEnvMap(mounts_map=mounts_map, vaccum_interval=60)
+    scheduler = MaintenanceScheduler(
+        mounts_map=mounts_map,
+        pid_env_map=pid_env_map,
+        vaccum_interval=60,
+        env_tracer=None,
+    )
+
+    real_exists = Path.exists
+
+    def exists(self):
+        if str(self) == "/proc/162148":
+            return False
+        return real_exists(self)
+
+    with patch.object(Path, "exists", exists):
+        scheduler._purge_mounts_if_needed()
+        assert "162148" in mounts_map.pid_maps
+
+        scheduler._mounts_start = datetime.datetime.now() - datetime.timedelta(seconds=61)
+        scheduler._purge_mounts_if_needed()
+
+    assert "162148" not in mounts_map.pid_maps
+    assert "self" in mounts_map.pid_maps
+
+
+def test_pid_env_map_vaccum_does_not_purge_mounts():
+    mounts_map = MountsMap()
+    mounts_map.pid_maps["162148"] = {"by_mnt_id": {}, "by_devt": {}}
+    pid_env_map = PidEnvMap(mounts_map=mounts_map, vaccum_interval=60)
+    pid_env_map.pidmap["162148"] = {"JOBID": "1"}
+
+    with patch.object(mounts_map, "purge_stale_pids") as purge:
+        with patch("vnfs_collector.nfsops.Path") as mock_path:
+            mock_path.return_value.exists.return_value = False
+            pid_env_map.vaccum()
+        purge.assert_not_called()
+    assert "162148" not in pid_env_map.pidmap
+
+
+@patch("vnfs_collector.nfsops.BPF")
+def test_stats_collector_attach_respects_flags(mock_bpf):
+    from vnfs_collector.nfsops import StatsCollector
+
+    mock_bpf.get_kprobe_functions.return_value = []
+    bpf = mock_bpf.return_value
+    collector = StatsCollector(
+        MagicMock(),
+        bpf,
+        MagicMock(),
+        MagicMock(),
+        use_mnt_id_attribution=False,
+        track_lookup_access=False,
+    )
+    collector.attach()
+
+    attached = [c.kwargs["event"] for c in bpf.attach_kprobe.call_args_list]
+    assert "nfs_do_access" not in attached
+    assert "nfs_lookup_revalidate" not in attached
+    assert "security_path_mkdir" not in attached
+    assert "nfs_file_read" in attached
 
 
 def test_anonymize_valid_fields(data):

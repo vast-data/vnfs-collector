@@ -282,6 +282,39 @@ vnfs-collector -d prometheus -i 5 --sink-batch-size 6
 
 Default is `--sink-batch-size 1` (no batching, send immediately after each collection).
 
+#### Mount attribution
+
+**`--mnt-id-segmentation`** (default: `true`): When enabled, the BPF program reads
+per-mount IDs from the kernel, resolves mount points via `/proc/<pid>/mountinfo`,
+and attaches `security_path_*` LSM probes so inode-only NFS operations (create,
+unlink, mkdir, etc.) can be tied to a mount. When disabled, aggregation and
+resolution use superblock device id (`sbdev`, `major:minor` from mountinfo column 3)
+only; `security_path_*` probes are not attached. Use `false` only if you accept
+coarser attribution when multiple NFS mounts share one superblock or you know
+that your NFS mounts do not share the same fsid.
+
+**`--track-lookup-access`** (default: `true`): When enabled, `nfs_lookup` and
+`nfs_do_access` are traced. When disabled, those probes are not loaded. Lookup and
+access counters use inode/sbdev attribution only and are **ambiguous** when several
+mount points share the same superblock; disable if you do not need these metrics or
+your mounts do not share `sbdev`.
+
+Example (sbdev-only, no lookup/access):
+
+```bash
+vnfs-collector -d file --mnt-id-segmentation false --track-lookup-access false
+```
+
+YAML:
+
+```yaml
+mnt_id_segmentation: true
+track_lookup_access: true
+interval: 5
+file:
+  samples_path: /opt/vnfs-collector/vnfs-collector.log
+```
+
 #### File Driver
 The file driver stores collected statistics in a local file. It provides the following configuration options:
 
@@ -470,3 +503,58 @@ To check:
 ```bash
 curl http://<node-ip>:30900/metrics
 ```
+
+## Metrics
+
+The collector tracks per-process NFS operations and exports them through all drivers
+(Prometheus, OpenTelemetry, Kafka, VDB, file, screen). Each sample is keyed by process
+and mount; see [Mount attribution](#mount-attribution) for how mounts are resolved.
+
+### Labels
+
+| Label | Description |
+|-------|-------------|
+| `HOSTNAME` | Host where the collector runs |
+| `UID` | UID of the process that issued the NFS operation |
+| `COMM` | Process command name |
+| `MOUNT` | Local mount point |
+| `REMOTE_PATH` | Remote NFS path (server export path) |
+| *(custom)* | Any environment variable listed in `--envs` / `envs:` (e.g. `SLURM_JOB_ID`) |
+
+Prometheus uses the label names above. OpenTelemetry uses the same dimensions with
+lowercase attribute names (`hostname`, `uid`, `comm`, `mount`, `remote_path`, …).
+
+### Metric naming
+
+- **Prometheus**: `vnfs_<STATKEY>` (e.g. `vnfs_READ_COUNT`, `vnfs_WRITE_BYTES`)
+- **OpenTelemetry**: `vnfs_<statkey>` in lowercase (e.g. `vnfs_read_count`, `vnfs_write_bytes`)
+
+All metrics are gauges reflecting the latest collection interval (or the aggregated
+batch when `--sink-batch-size` > 1). Count, error, byte, and duration values within
+an interval are summed; duration values are in seconds.
+
+### Collected metrics
+
+| Operation | Prometheus metrics | Description |
+|-----------|-------------------|-------------|
+| OPEN | `vnfs_OPEN_COUNT`, `vnfs_OPEN_ERRORS`, `vnfs_OPEN_DURATION` | NFS open |
+| CLOSE | `vnfs_CLOSE_COUNT`, `vnfs_CLOSE_ERRORS`, `vnfs_CLOSE_DURATION` | NFS close |
+| READ | `vnfs_READ_COUNT`, `vnfs_READ_ERRORS`, `vnfs_READ_DURATION`, `vnfs_READ_BYTES` | NFS read |
+| WRITE | `vnfs_WRITE_COUNT`, `vnfs_WRITE_ERRORS`, `vnfs_WRITE_DURATION`, `vnfs_WRITE_BYTES` | NFS write |
+| GETATTR | `vnfs_GETATTR_COUNT`, `vnfs_GETATTR_ERRORS`, `vnfs_GETATTR_DURATION` | NFS getattr |
+| SETATTR | `vnfs_SETATTR_COUNT`, `vnfs_SETATTR_ERRORS`, `vnfs_SETATTR_DURATION` | NFS setattr |
+| FLUSH | `vnfs_FLUSH_COUNT`, `vnfs_FLUSH_ERRORS`, `vnfs_FLUSH_DURATION` | NFS flush |
+| FSYNC | `vnfs_FSYNC_COUNT`, `vnfs_FSYNC_ERRORS`, `vnfs_FSYNC_DURATION` | NFS fsync |
+| LOCK | `vnfs_LOCK_COUNT`, `vnfs_LOCK_ERRORS`, `vnfs_LOCK_DURATION` | NFS lock |
+| MMAP | `vnfs_MMAP_COUNT`, `vnfs_MMAP_ERRORS`, `vnfs_MMAP_DURATION` | NFS mmap |
+| READDIR | `vnfs_READDIR_COUNT`, `vnfs_READDIR_ERRORS`, `vnfs_READDIR_DURATION` | NFS readdir |
+| CREATE | `vnfs_CREATE_COUNT`, `vnfs_CREATE_ERRORS`, `vnfs_CREATE_DURATION` | NFS create |
+| LINK | `vnfs_LINK_COUNT`, `vnfs_LINK_ERRORS`, `vnfs_LINK_DURATION` | NFS link |
+| UNLINK | `vnfs_UNLINK_COUNT`, `vnfs_UNLINK_ERRORS`, `vnfs_UNLINK_DURATION` | NFS unlink |
+| SYMLINK | `vnfs_SYMLINK_COUNT`, `vnfs_SYMLINK_ERRORS`, `vnfs_SYMLINK_DURATION` | NFS symlink |
+| LOOKUP | `vnfs_LOOKUP_COUNT`, `vnfs_LOOKUP_ERRORS`, `vnfs_LOOKUP_DURATION` | NFS lookup (requires `--track-lookup-access`) |
+| RENAME | `vnfs_RENAME_COUNT`, `vnfs_RENAME_ERRORS`, `vnfs_RENAME_DURATION` | NFS rename |
+| ACCESS | `vnfs_ACCESS_COUNT`, `vnfs_ACCESS_ERRORS`, `vnfs_ACCESS_DURATION` | NFS access (requires `--track-lookup-access`) |
+| MKDIR | `vnfs_MKDIR_COUNT`, `vnfs_MKDIR_ERRORS`, `vnfs_MKDIR_DURATION` | NFS mkdir |
+| RMDIR | `vnfs_RMDIR_COUNT`, `vnfs_RMDIR_ERRORS`, `vnfs_RMDIR_DURATION` | NFS rmdir |
+| LISTXATTR | `vnfs_LISTXATTR_COUNT`, `vnfs_LISTXATTR_ERRORS`, `vnfs_LISTXATTR_DURATION` | NFS listxattr |

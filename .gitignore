@@ -91,4 +91,5 @@ venv.bak/
 .idea/
 
 # vscode
+.vscode/
 /.lh/.lhignore

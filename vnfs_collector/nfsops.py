@@ -12,9 +12,9 @@
 import os
 import re
 import argparse
+import time
 
 import numpy
-import psutil
 import socket
 from threading import Thread
 from datetime import datetime
@@ -222,6 +222,11 @@ class MountInfo:
             return match.group(1)
         return ""
 
+    def __str__(self):
+        return f"{self.mountpoint} remote={self.remote_path} dev={self.device}"
+
+    __repr__ = __str__
+
 
 class MutableEnvsMixin:
     """Mixin to provide a mutable `envs` property for managing environment variables."""
@@ -239,23 +244,40 @@ class MutableEnvsMixin:
 
 
 class MountsMap:
-    def __init__(self, vaccum_interval=600):
-        self.by_mnt_id = {}
-        self.by_devt = {}
-        self.vaccum_interval = vaccum_interval
-        self.start = datetime.now()
-        self.refresh_map_mountinfo()
+    def __init__(self, mnt_id_segmentation=True):
+        # pid (str) -> {"by_mnt_id": {mnt_id: MountInfo}, "by_devt": {devt: MountInfo}}
+        self.pid_maps = {}
+        self.mnt_id_segmentation = mnt_id_segmentation
+        self.refresh_map_mountinfo("self")
 
     def get_mountinfo(self, pid):
         return f"/proc/{pid}/mountinfo"
 
+    @staticmethod
+    def _pid_key(pid):
+        return str(pid)
+
+    def purge_stale_pids(self):
+        """Drop mount caches for processes that no longer exist."""
+        for pid in list(self.pid_maps):
+            if pid == "self":
+                continue
+            if not Path("/proc/%s" % pid).exists():
+                del self.pid_maps[pid]
+        logger.debug("MountsMap: purged stale pids, remaining=%s", list(self.pid_maps))
+
     def refresh_map_mountinfo(self, pid="self"):
+        by_mnt_id = {}
+        by_devt = {}
         try:
             mounts = open(self.get_mountinfo(pid)).readlines()
-        except:
-            # pid is gone... open our mountinfo proc file
-            logger.debug(f"MountsMap: pid: {pid} is gone...")
-            mounts = open(self.get_mountinfo("self")).readlines()
+        except OSError:
+            logger.debug("MountsMap: pid %s mountinfo unavailable", pid)
+            self.pid_maps[self._pid_key(pid)] = {
+                "by_mnt_id": by_mnt_id,
+                "by_devt": by_devt,
+            }
+            return
 
         for mount in mounts:
             parts = mount.split()
@@ -267,15 +289,12 @@ class MountsMap:
             if 'nfs' not in fstype:
                 continue
             mi = MountInfo(mountpoint, device)
-            self.by_mnt_id[mnt_id] = mi
-            self.by_devt[devt] = mi
-
-    def refresh_map(self):
-        for p in psutil.disk_partitions(all=True):
-            if 'nfs' not in p.fstype:
-                continue
-            devt = self.devt_to_str(os.stat(p.mountpoint).st_dev)
-            self.by_devt[devt] = MountInfo(p.mountpoint, p.device)
+            by_mnt_id[mnt_id] = mi
+            by_devt[devt] = mi
+        self.pid_maps[self._pid_key(pid)] = {
+            "by_mnt_id": by_mnt_id,
+            "by_devt": by_devt,
+        }
 
     def devt_to_str(self, st_dev):
         MINORBITS = 20
@@ -283,34 +302,42 @@ class MountsMap:
 
     def get_mountpoint(self, mnt_id, sbdev, pid="self"):
         """
-        Resolve NFS mount metadata using mountinfo mount id (kernel struct mount::mnt_id),
-        falling back to superblock device id (major:minor) when mnt_id is absent or unknown.
+        Resolve NFS mount metadata. With mnt_id_segmentation, prefer mountinfo mount id
+        (struct mount::mnt_id) then sbdev; otherwise sbdev (major:minor) only.
         """
         dev = self.devt_to_str(sbdev)
+        key = self._pid_key(pid)
 
         def _lookup():
-            if mnt_id:
-                mi = self.by_mnt_id.get(str(int(mnt_id)))
+            maps = self.pid_maps.get(key)
+            if not maps:
+                return None
+            by_mnt_id = maps["by_mnt_id"]
+            by_devt = maps["by_devt"]
+            if self.mnt_id_segmentation and mnt_id:
+                mi = by_mnt_id.get(str(int(mnt_id)))
                 if mi is not None:
+                    logger.debug(f"mount-resolve pid={pid} mnt_id={mnt_id or 0} sbdev={dev} via=mnt_id -> {mi}")
                     return mi
-            return self.by_devt.get(dev)
+            mi = by_devt.get(dev)
+            if mi is not None:
+                logger.debug(f"mount-resolve pid={pid} mnt_id={mnt_id or 0} sbdev={dev} via=sbdev -> {mi}")
+                return mi
+            return None
 
         res = _lookup()
         if res is not None:
             return res
-        if (datetime.now() - self.start).total_seconds() > self.vaccum_interval:
-            self.by_mnt_id = {}
-            self.by_devt = {}
-            self.start = datetime.now()
         self.refresh_map_mountinfo(pid)
         res = _lookup()
         if res is not None:
             return res
-        self.refresh_map()
+        self.refresh_map_mountinfo("self")
+        key = "self"
         res = _lookup()
         if res is not None:
             return res
-        logger.warning("No mountpoint found for mnt_id {} devt {}".format(mnt_id or 0, dev))
+        logger.warning("No mountpoint found for pid:{} mnt_id:{} devt:{}".format(pid, mnt_id or 0, dev))
         return None
 
 class PidEnvMap:
@@ -318,8 +345,9 @@ class PidEnvMap:
     Map interface of pid and the dictionary of the tracked environment
     variables.
     """
-    def __init__(self, vaccum_interval=600):
+    def __init__(self, mounts_map, vaccum_interval=600):
         self.pidmap = {}
+        self.mounts_map = mounts_map
         self.vaccum_interval = vaccum_interval
         self.start = datetime.now()
 
@@ -337,6 +365,7 @@ class PidEnvMap:
 
     def insert(self, pid, envs):
         self.pidmap[str(pid)] = envs
+        self.mounts_map.refresh_map_mountinfo(pid)
         logger.debug("PidEnvMap: insert pid[%d]" % pid)
         logger.debug(self.pidmap)
 
@@ -353,30 +382,24 @@ class PidEnvMap:
                 return self.pidmap[str(pid)]
             return {}
 
+
 class EnvTracer(MutableEnvsMixin):
     """
     Tracer traps pid execution and collects the existance of the tracked
-    environment variables.
+    environment variables. Polling/vacuum are owned by MaintenanceScheduler.
     """
     def __init__(self, _args, bpf, pid_env_map):
         super().__init__(_args)
         self.b = bpf
         self.pid_env_map = pid_env_map
 
-    def start(self):
-        self.b["events"].open_perf_buffer(self.get_process_envs)
-        self.t = Thread(target=self.trace_pid_exec)
-        self.t.daemon = True
-        self.t.start()
-
     def attach(self):
+        self.b["events"].open_perf_buffer(self.get_process_envs)
         if self.envs:
             self.b.attach_kprobe(event=self.b.get_syscall_fnname("execve"), fn_name="trace_execve")
 
-    def trace_pid_exec(self):
-        while True:
-            self.b.perf_buffer_poll()
-            self.pid_env_map.vaccum_if_needed()
+    def poll(self, timeout_ms):
+        self.b.perf_buffer_poll(timeout=timeout_ms)
 
     def get_process_envs(self, cpu, data, size):
         data = self.b["events"].event(data)
@@ -385,17 +408,59 @@ class EnvTracer(MutableEnvsMixin):
             self.pid_env_map.insert(data.pid, envs)
 
 
+class MaintenanceScheduler:
+    """
+    Owns the background thread for optional EnvTracer polling and periodic
+    vacuum of PidEnvMap / MountsMap. MountsMap purge always runs; env-map
+    vacuum runs only when EnvTracer is enabled.
+    """
+    # Wake often enough for env events; mounts/env vacuum still gated by interval.
+    _POLL_TIMEOUT_MS = 1000
+    _SLEEP_TIMEOUT = 10
+
+    def __init__(self, mounts_map, pid_env_map, vaccum_interval=600, env_tracer=None):
+        self.mounts_map = mounts_map
+        self.pid_env_map = pid_env_map
+        self.vaccum_interval = vaccum_interval
+        self.env_tracer = env_tracer
+        self._mounts_start = datetime.now()
+        self._thread = None
+
+    def start(self):
+        if self.env_tracer:
+            self.env_tracer.attach()
+        self._thread = Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _purge_mounts_if_needed(self):
+        if (datetime.now() - self._mounts_start).total_seconds() > self.vaccum_interval:
+            self.mounts_map.purge_stale_pids()
+            self._mounts_start = datetime.now()
+
+    def _run(self):
+        while True:
+            if self.env_tracer:
+                self.env_tracer.poll(timeout_ms=self._POLL_TIMEOUT_MS)
+                self.pid_env_map.vaccum_if_needed()
+            else:
+                time.sleep(self._SLEEP_TIMEOUT)
+            self._purge_mounts_if_needed()
+
+
+
 class StatsCollector(MutableEnvsMixin):
     """
     Tracer traps pid execution and collects the existance of the tracked
     environment variables.
     """
-    def __init__(self, _args, bpf, pid_env_map, mounts_map, use_mnt_id_attribution=True):
+    def __init__(self, _args, bpf, pid_env_map, mounts_map,
+                 use_mnt_id_attribution=True, track_lookup_access=True):
         super().__init__(_args)
         self.b = bpf
         self.pid_env_map = pid_env_map
         self.mounts_map = mounts_map
         self.use_mnt_id_attribution = use_mnt_id_attribution
+        self.track_lookup_access = track_lookup_access
         self.hostname = os.getenv("HOSTNAME", socket.gethostname())
         # check whether hash table batch ops is supported
         try:
@@ -453,12 +518,15 @@ class StatsCollector(MutableEnvsMixin):
         self.b.attach_kretprobe(event="nfs_unlink", fn_name="trace_nfs_unlink_ret")              # updates unlink errors,duration
         self.b.attach_kprobe(event="nfs_symlink", fn_name="trace_nfs_symlink")                   # updates symlink count
         self.b.attach_kretprobe(event="nfs_symlink", fn_name="trace_nfs_symlink_ret")            # updates symlink errors,duration
-        self.b.attach_kprobe(event="nfs_lookup", fn_name="trace_nfs_lookup")                     # updates lookup count
-        self.b.attach_kretprobe(event="nfs_lookup", fn_name="trace_nfs_lookup_ret")              # updates lookup errors,duration
+        if self.track_lookup_access:
+            self.b.attach_kprobe(event="nfs_lookup_revalidate", fn_name="trace_nfs_lookup")          # updates lookup count
+            self.b.attach_kretprobe(event="nfs_lookup_revalidate", fn_name="trace_nfs_lookup_ret")   # updates lookup errors,duration
+            self.b.attach_kprobe(event="nfs4_lookup_revalidate", fn_name="trace_nfs_lookup")         # updates lookup count
+            self.b.attach_kretprobe(event="nfs4_lookup_revalidate", fn_name="trace_nfs_lookup_ret")  # updates lookup errors,duration
+            self.b.attach_kprobe(event="nfs_do_access", fn_name="trace_nfs_do_access")               # updates access
+            self.b.attach_kretprobe(event="nfs_do_access", fn_name="trace_nfs_do_access_ret")        # updates access errors,duration
         self.b.attach_kprobe(event="nfs_rename", fn_name="trace_nfs_rename")                     # updates rename count
         self.b.attach_kretprobe(event="nfs_rename", fn_name="trace_nfs_rename_ret")              # updates rename errors,duration
-        self.b.attach_kprobe(event="nfs_do_access", fn_name="trace_nfs_do_access")               # updates access
-        self.b.attach_kretprobe(event="nfs_do_access", fn_name="trace_nfs_do_access_ret")        # updates access errors,duration
         self.b.attach_kprobe(event="nfs_mkdir", fn_name="trace_nfs_mkdir")                       # updates mkdir count
         self.b.attach_kretprobe(event="nfs_mkdir", fn_name="trace_nfs_mkdir_ret")                # updates mkdir errors,duration
         self.b.attach_kprobe(event="nfs_rmdir", fn_name="trace_nfs_rmdir")                       # updates rmdir count
