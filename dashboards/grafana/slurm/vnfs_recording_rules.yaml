@@ -49,6 +49,10 @@ groups:
                    vnfs_MKDIR_COUNT{job="vnfs-collector"}   + 
                    vnfs_RMDIR_COUNT{job="vnfs-collector"}   + 
                    vnfs_LISTXATTR_COUNT{job="vnfs-collector"}) / 30
+      - record: vnfs:read_duration:total
+        expr: sum (vnfs_READ_DURATION{job="vnfs-collector"}) / 30
+      - record: vnfs:write_duration:total
+        expr: sum (vnfs_WRITE_DURATION{job="vnfs-collector"}) / 30
       - record: vnfs:errors:total
         expr: sum (vnfs_OPEN_ERRORS{job="vnfs-collector"}    + 
                    vnfs_CLOSE_ERRORS{job="vnfs-collector"}   + 
@@ -813,3 +817,106 @@ groups:
               vnfs_LISTXATTR_ERRORS{job="vnfs-collector"}) / 30,
             "VAST_QOS_POLICY", "No-Policy", "VAST_QOS_POLICY", "^$"
           )
+
+# -----------------------------------  DASHBOARD BY HOST + MOUNT + REMOTE_PATH  -----------------------------------
+# Assumes collector interval = 30s (same as other groups). Empty MOUNT/REMOTE_PATH excluded.
+  - name: vnfs_by_host_mount_path
+    interval: 30s
+    rules:
+      - record: vnfs:read_iops:by_host_mount_path
+        expr: sum by (HOSTNAME, MOUNT, REMOTE_PATH) (vnfs_READ_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}) / 30
+      - record: vnfs:write_iops:by_host_mount_path
+        expr: sum by (HOSTNAME, MOUNT, REMOTE_PATH) (vnfs_WRITE_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}) / 30
+      - record: vnfs:read_bytes:by_host_mount_path
+        expr: sum by (HOSTNAME, MOUNT, REMOTE_PATH) (vnfs_READ_BYTES{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}) / 30
+      - record: vnfs:write_bytes:by_host_mount_path
+        expr: sum by (HOSTNAME, MOUNT, REMOTE_PATH) (vnfs_WRITE_BYTES{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}) / 30
+      - record: vnfs:read_duration:by_host_mount_path
+        expr: sum by (HOSTNAME, MOUNT, REMOTE_PATH) (vnfs_READ_DURATION{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}) / 30
+      - record: vnfs:write_duration:by_host_mount_path
+        expr: sum by (HOSTNAME, MOUNT, REMOTE_PATH) (vnfs_WRITE_DURATION{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}) / 30
+      - record: vnfs:read_latency:by_host_mount_path
+        expr: |
+          sum by (HOSTNAME, MOUNT, REMOTE_PATH) (vnfs_READ_DURATION{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""})
+          /
+          clamp_min(sum by (HOSTNAME, MOUNT, REMOTE_PATH) (vnfs_READ_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}), 1)
+      - record: vnfs:write_latency:by_host_mount_path
+        expr: |
+          sum by (HOSTNAME, MOUNT, REMOTE_PATH) (vnfs_WRITE_DURATION{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""})
+          /
+          clamp_min(sum by (HOSTNAME, MOUNT, REMOTE_PATH) (vnfs_WRITE_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}), 1)
+      - record: vnfs:read_metadata_ops:by_host_mount_path
+        expr: |
+          sum by (HOSTNAME, MOUNT, REMOTE_PATH) (
+            vnfs_GETATTR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LOOKUP_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_ACCESS_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_READDIR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_MMAP_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LISTXATTR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}
+          ) / 30
+      - record: vnfs:write_metadata_ops:by_host_mount_path
+        expr: |
+          sum by (HOSTNAME, MOUNT, REMOTE_PATH) (
+            vnfs_OPEN_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_CLOSE_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_SETATTR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_FLUSH_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_FSYNC_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LOCK_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_CREATE_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LINK_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_UNLINK_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_SYMLINK_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_RENAME_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_MKDIR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_RMDIR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}
+          ) / 30
+      - record: vnfs:metadata_ops:by_host_mount_path
+        expr: |
+          sum by (HOSTNAME, MOUNT, REMOTE_PATH) (
+            vnfs_OPEN_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_CLOSE_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_GETATTR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_SETATTR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_FLUSH_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_FSYNC_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LOCK_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_MMAP_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_READDIR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_CREATE_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LINK_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_UNLINK_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_SYMLINK_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LOOKUP_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_RENAME_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_ACCESS_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_MKDIR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_RMDIR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LISTXATTR_COUNT{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}
+          ) / 30
+      - record: vnfs:errors:by_host_mount_path
+        expr: |
+          sum by (HOSTNAME, MOUNT, REMOTE_PATH) (
+            vnfs_OPEN_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_CLOSE_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_READ_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_WRITE_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_GETATTR_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_SETATTR_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_FLUSH_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_FSYNC_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LOCK_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_MMAP_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_READDIR_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_CREATE_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LINK_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_UNLINK_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_SYMLINK_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LOOKUP_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_RENAME_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_ACCESS_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_MKDIR_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_RMDIR_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""} +
+            vnfs_LISTXATTR_ERRORS{job="vnfs-collector", MOUNT!="", REMOTE_PATH!=""}
+          ) / 30

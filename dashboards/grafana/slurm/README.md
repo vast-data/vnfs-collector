@@ -22,9 +22,11 @@ The setup consists of three main components:
         │ Exports:              │ Pre-computes:
         │ - vnfs_READ_COUNT     │ - vnfs:read_iops:total
         │ - vnfs_WRITE_BYTES    │ - vnfs:read_bytes:by_hostname
-        │ - SLURM_JOB_ID label  │ - vnfs:metadata_ops:by_slurm_job_id
-        │ - VAST_QOS_POLICY     │ - etc.
-        │   label               │
+        │ - etc.                │ - vnfs:metadata_ops:by_slurm_job_id
+        │ Labels:               │ - vnfs:read_iops:by_host_mount_path
+        │   SLURM_JOB_ID /      │ - etc.
+        │   HOSTNAME / MOUNT /  │
+        │   REMOTE_PATH         │
         └───────────────────────┘
 ```
 
@@ -60,12 +62,12 @@ Recording rules pre-compute aggregated metrics every 30 seconds, reducing query 
 
 | Group Name | Description | Example Metrics |
 |------------|-------------|-----------------|
-| `vnfs_total` | Cluster-wide totals | `vnfs:read_iops:total`, `vnfs:write_bytes:total`, `vnfs:errors:total` |
+| `vnfs_total` | Cluster-wide totals | `vnfs:read_iops:total`, `vnfs:write_bytes:total`, `vnfs:read_duration:total`, `vnfs:errors:total` |
 | `vnfs_by_hostname` | Per-host breakdown | `vnfs:read_bytes:by_hostname`, `vnfs:metadata_ops:by_hostname` |
-| `vnfs_by_op_type` | Per-operation breakdown | `vnfs:iops:by_op_type{op_type="read"}`, `vnfs:duration:by_op_type` |
+| `vnfs_by_op_type` | Per-operation breakdown | `vnfs:iops:by_op_type{op_type="read"}`, `vnfs:errors:by_op_type` |
 | `vnfs_by_mount` | Per-mount breakdown | `vnfs:read_iops:by_mount`, `vnfs:errors:by_mount` |
 | `vnfs_by_slurm_job_id` | Per-Slurm-job breakdown | `vnfs:read_bytes:by_slurm_job_id`, `vnfs:metadata_ops:by_slurm_job_id` |
-| `vnfs_by_vast_qos_policy` | Per-QoS-policy breakdown | `vnfs:write_iops:by_vast_qos_policy` |
+| `vnfs_by_host_mount_path` | Per host × mount × remote path | `vnfs:read_iops:by_host_mount_path`, `vnfs:read_latency:by_host_mount_path` |
 
 **Installation (Standalone Prometheus):**
 
@@ -94,16 +96,19 @@ curl -s http://localhost:9090/api/v1/rules | \
 
 ### 3. vnfs_collector_grafana_dashboard.json - Grafana Dashboard
 
-The dashboard provides visualization panels organized into sections:
+The dashboard provides visualization panels organized into sections. By default only **Overview** and **Totals** are expanded; breakdowns are collapsed.
+
+![VNFS Collector Dashboard (Recording Rules)](vnfs_collector_grafana_dashboard.png)
 
 | Section | Description |
 |---------|-------------|
-| **Overview (Totals)** | Stat panels showing cluster-wide Read IOPS, Write IOPS, Metadata IOPS, Throughput, and Errors |
-| **Breakdown by Host** | Time series graphs showing metrics per compute node |
-| **Breakdown by NFS Operation Type** | Throughput, IOPS, duration, and errors by operation (read, write, open, close, getattr, etc.) |
-| **Breakdown by Mount** | Metrics grouped by NFS mount point |
-| **Breakdown by SLURM Job ID** | Metrics grouped by Slurm job, useful for identifying I/O-heavy jobs |
-| **Breakdown by VAST QoS Policy** | Metrics grouped by QoS policy for capacity planning |
+| **Overview (cluster totals)** | Stat panels showing cluster-wide Read IOPS, Write IOPS, Metadata IOPS, Throughput, and Errors |
+| **Totals over time (cluster)** | Time series for IOPS, throughput, metadata, errors, and average read/write latency |
+| **Breakdown by Hostname (Top $topk)** | Top-N R/W IOPS, throughput, metadata IOPS, and errors per host |
+| **Breakdown by Mount (Top $topk)** | Top-N metrics per NFS mount point |
+| **Breakdown by SLURM Job ID (Top $topk)** | Top-N metrics per Slurm job, useful for identifying I/O-heavy jobs |
+| **Breakdown by NFS Operation Type** | Metadata IOPS, metadata latency, and errors by operation (getattr, lookup, open, etc.) |
+| **Breakdown by Host × Mount × Remote Path (Top $topk)** | Drill-down with hostname / mount / remote_path filters, including latency |
 
 **Installation:**
 
@@ -117,6 +122,10 @@ The dashboard provides visualization panels organized into sections:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `$topk` | `10` | Number of top series to display in time series panels |
+| `$hostname` | All (`.*`) | Filter by hostname |
+| `$mount` | All (`.*`) | Filter by mount |
+| `$remote_path` | All (`.*`) | Filter by remote path |
+| `$job_id` | All (`.*`) | Filter by Slurm job ID |
 
 ## Metric Labels
 
