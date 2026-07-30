@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## Version 1.7
+* updated grafana slurm dashboard and recording rules examples
+
 ## Version 1.6
 * fixed per-mount stats when multiple mounts share the same fsid
 * Added offline make target for pkg install without internet access
