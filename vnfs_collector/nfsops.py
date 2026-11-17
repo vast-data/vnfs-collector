@@ -26,6 +26,27 @@ from vnfs_collector.logger import get_logger, COLORS
 
 logger = get_logger("nfsops", COLORS.magenta)
 
+
+def _drain_bpf_counts(counts, batch_ops):
+    """Drain the counts BPF map without crashing when batch delete returns ENOSPC."""
+    if batch_ops:
+        try:
+            return list(counts.items_lookup_and_delete_batch())
+        except Exception as exc:
+            msg = str(exc)
+            if "No space left on device" not in msg and "ENOSPC" not in msg:
+                raise
+            logger.warning(
+                "counts map batch drain failed (%s); falling back to items()+clear()",
+                exc,
+            )
+            items = list(counts.items())
+            counts.clear()
+            return items
+    items = list(counts.items())
+    counts.clear()
+    return items
+
 class hashabledict(dict):
     def __hash__(self):
         return hash(tuple(sorted(self.items())))
@@ -563,7 +584,7 @@ class StatsCollector(MutableEnvsMixin):
 
         counts = self.b.get_table("counts")
         statistics = []
-        for k, v in (counts.items_lookup_and_delete_batch() if self.batch_ops else counts.items()):
+        for k, v in _drain_bpf_counts(counts, self.batch_ops):
             output = {
                     "TIMEDELTA": interval,
                     "TIMESTAMP":        timestamp,
@@ -647,8 +668,6 @@ class StatsCollector(MutableEnvsMixin):
 
             statistics.append(output)
 
-        if not self.batch_ops:
-            counts.clear()
 
         df = pd.DataFrame(statistics)
         if not df.empty:

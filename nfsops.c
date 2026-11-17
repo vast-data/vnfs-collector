@@ -85,7 +85,7 @@ struct stats_t {
 	struct stat_t rmdir;
 };
 
-BPF_HASH(counts, struct info_t, struct stats_t);
+BPF_HASH(counts, struct info_t, struct stats_t, 65536);
 BPF_HASH(mnt_ns_hint, u64, u32);
 
 struct pidinfo_t {

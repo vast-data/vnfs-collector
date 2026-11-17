@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 from unittest.mock import patch, MagicMock
 from vnfs_collector.nfsops import (
+    _drain_bpf_counts,
     group_stats,
     filter_stats,
     anonymize_stats,
@@ -303,3 +304,29 @@ def test_anonymize_valid_fields(data):
             name="TAGS",
         ),
     )
+
+def test_drain_bpf_counts_batch_enospc_fallback():
+    counts = MagicMock()
+    key, val = MagicMock(), MagicMock()
+    counts.items_lookup_and_delete_batch.side_effect = Exception(
+        "BPF_MAP_LOOKUP_AND_DELETE_BATCH has failed: No space left on device"
+    )
+    counts.items.return_value = [(key, val)]
+
+    out = _drain_bpf_counts(counts, batch_ops=True)
+
+    assert out == [(key, val)]
+    counts.clear.assert_called_once()
+
+
+def test_drain_bpf_counts_no_batch_clears():
+    counts = MagicMock()
+    key, val = MagicMock(), MagicMock()
+    counts.items.return_value = [(key, val)]
+
+    out = _drain_bpf_counts(counts, batch_ops=False)
+
+    assert out == [(key, val)]
+    counts.clear.assert_called_once()
+    counts.items_lookup_and_delete_batch.assert_not_called()
+
