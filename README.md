@@ -227,6 +227,7 @@ Configuration file example:
 ```yaml
 interval: 5
 sink_batch_size: 1
+counts_map_size: 65536
 vaccum: 600
 screen: {}
 file:

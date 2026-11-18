@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## Version 1.8
+* raised default BPF `counts` map size to 65536 and added `--counts-map-size`
+  so busy nodes can avoid ENOSPC.
+* on counts batch-drain ENOSPC, fall back to items()+clear() for that interval
+  (log a warning) instead of exiting the collector
+
 ## Version 1.7
 * updated grafana slurm dashboard and recording rules examples
 

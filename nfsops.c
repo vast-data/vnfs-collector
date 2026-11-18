@@ -85,7 +85,12 @@ struct stats_t {
 	struct stat_t rmdir;
 };
 
-BPF_HASH(counts, struct info_t, struct stats_t);
+#ifndef COUNTS_MAX_ENTRIES
+#define COUNTS_MAX_ENTRIES 65536
+#endif
+BPF_HASH(counts, struct info_t, struct stats_t, COUNTS_MAX_ENTRIES);
+/* Index 0: number of failed counts inserts (map full) since last userspace read. */
+BPF_ARRAY(counts_drops, u64, 1);
 BPF_HASH(mnt_ns_hint, u64, u32);
 
 struct pidinfo_t {
@@ -237,7 +242,14 @@ static struct stats_t *get_stats(u64 *start_time, u64 *byte_count)
 	starts.delete(&pid);
 
 	struct stats_t zero = {};
-	return counts.lookup_or_try_init(&info, &zero);
+	struct stats_t *statsp = counts.lookup_or_try_init(&info, &zero);
+	if (!statsp) {
+		u32 drop_idx = 0;
+		u64 *drops = counts_drops.lookup(&drop_idx);
+		if (drops)
+			__sync_fetch_and_add(drops, 1);
+	}
+	return statsp;
 }
 
 static struct start_t *get(void)

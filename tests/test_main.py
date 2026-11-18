@@ -30,11 +30,20 @@ class TestMainSuite:
         out, err = capfd.readouterr()
         assert "No driver specified" in err
 
+    async def test_counts_map_size_must_be_positive(self, capfd, cli_factory):
+        cli_factory("-d=screen --counts-map-size=0")
+        with pytest.raises(SystemExit) as e:
+            await _exec()
+            assert e.value.code == 2
+        out, err = capfd.readouterr()
+        assert "--counts-map-size must be >= 1" in err
+
     @pytest.mark.parametrize("from_config", [True, False])
     @pytest.mark.parametrize(
         "cmd, expected_error",
         [
             ("-d=screen", None),
+            ("-d=screen --counts-map-size=131072", None),
             ("-d=screen --table-format", None),
             (
                 f"-d=screen -d=file --samples-path={ROOT} --max-backups=5 --max-size-mb=200",

@@ -201,6 +201,12 @@ conf_parser.add_argument(
          "share the same superblock (major:minor); disable if you do not need these counters."
 )
 conf_parser.add_argument(
+    "--counts-map-size", type=int, default=65536,
+    help="Max entries in the BPF counts hash map (unique pid/comm/mount keys per interval). "
+         "Raise on busy nodes if batch drain hits "
+         "ENOSPC (collector falls back and warns; raise this to avoid dropped keys)."
+)
+conf_parser.add_argument(
     "--vdb-schema-refresh-interval",
     type=int,
     default=300,  # default is 5 minutes (300 seconds)
@@ -244,6 +250,9 @@ async def _exec():
     if args.sink_batch_size < 1:
         conf_parser.error("--sink-batch-size must be >= 1.")
 
+    if args.counts_map_size < 1:
+        conf_parser.error("--counts-map-size must be >= 1.")
+
     # Validate mutual dependencies
     if args.tag_filter and not args.envs and not args.envs_from_vdb_schema:
         conf_parser.error("--tag-filter requires --envs or --envs-from-vdb-schema to be specified.")
@@ -276,6 +285,7 @@ async def _exec():
         ("envs-from-vdb-schema", args.envs_from_vdb_schema),
         ("mnt-id-segmentation", args.mnt_id_segmentation),
         ("track-lookup-access", args.track_lookup_access),
+        ("counts-map-size", args.counts_map_size),
     ]
     if args.envs_from_vdb_schema:
         display_options.append(("vdb-schema-refresh-interval", args.vdb_schema_refresh_interval))
@@ -302,6 +312,7 @@ async def _exec():
         use_mnt_id_bpf = False
         logger.info("Mount-id segmentation disabled; using superblock device id only")
 
+    bpf_text = f"#define COUNTS_MAX_ENTRIES {args.counts_map_size}\n" + bpf_text
     if use_mnt_id_bpf:
         bpf_text = (
             f"#define MOUNT_MNT_TO_MNT_ID_DELTA {_mnt_delta}\n"
