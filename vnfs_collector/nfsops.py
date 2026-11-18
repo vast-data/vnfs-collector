@@ -462,6 +462,7 @@ class StatsCollector(MutableEnvsMixin):
         self.use_mnt_id_attribution = use_mnt_id_attribution
         self.track_lookup_access = track_lookup_access
         self.hostname = os.getenv("HOSTNAME", socket.gethostname())
+        self.counts_map_size = getattr(_args, "counts_map_size", None)
         # check whether hash table batch ops is supported
         try:
             self.batch_ops = True if BPF.kernel_struct_has_field(b'bpf_map_ops',
@@ -557,13 +558,60 @@ class StatsCollector(MutableEnvsMixin):
                     self.b.attach_kprobe(event=sym, fn_name=fn)
                     self.b.attach_kretprobe(event=sym, fn_name="trace_sp_ret_fail_clear")
 
+    def _drain_counts(self, counts):
+        """Drain the counts BPF map for one collection interval.
+
+        Prefer batch lookup-and-delete when available. On ENOSPC (map full /
+        batch API pressure), fall back to items()+clear() so the collector
+        stays up and emits whatever keys still fit; raise --counts-map-size
+        if this warning appears.
+        """
+        if self.batch_ops:
+            try:
+                return list(counts.items_lookup_and_delete_batch())
+            except Exception as e:
+                err = str(e)
+                if "No space left on device" not in err and "ENOSPC" not in err:
+                    raise
+                logger.warning(
+                    "counts batch drain failed (%s); falling back to items()+clear() "
+                    "for this interval. Metrics for keys that could not fit in the "
+                    "map may be missing — raise --counts-map-size if this persists.",
+                    e,
+                )
+        items = list(counts.items())
+        counts.clear()
+        return items
+
+    def _consume_counts_drops(self):
+        """Read and clear the BPF counts_drops counter (failed new-key inserts)."""
+        try:
+            drops_tbl = self.b.get_table("counts_drops")
+        except Exception:
+            return 0
+        drops = 0
+        for _, v in drops_tbl.items():
+            drops += int(getattr(v, "value", v))
+        drops_tbl.clear()
+        return drops
+
     def collect_stats(self, interval, squash_pid=False, filter_tags=None, filter_condition=None, anon_fields=None):
         timestamp = pd.Timestamp.utcnow().astimezone(None).floor("s")
         logger.debug(f"######## collect sample ########")
 
         counts = self.b.get_table("counts")
+        drained = self._drain_counts(counts)
+        drops = self._consume_counts_drops()
+        if drops:
+            max_entries = self.counts_map_size or "?"
+            logger.warning(
+                "counts map full: dropped %d new key insert(s) this interval "
+                "(counts-map-size=%s). Raise --counts-map-size if this persists.",
+                drops,
+                max_entries,
+            )
         statistics = []
-        for k, v in (counts.items_lookup_and_delete_batch() if self.batch_ops else counts.items()):
+        for k, v in drained:
             output = {
                     "TIMEDELTA": interval,
                     "TIMESTAMP":        timestamp,
@@ -646,9 +694,6 @@ class StatsCollector(MutableEnvsMixin):
                 output["MOUNT"] = output["REMOTE_PATH"] = ""
 
             statistics.append(output)
-
-        if not self.batch_ops:
-            counts.clear()
 
         df = pd.DataFrame(statistics)
         if not df.empty:

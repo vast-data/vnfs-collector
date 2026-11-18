@@ -20,6 +20,15 @@ module = importlib.util.module_from_spec(spec)
 sys.modules["bcc"] = module
 spec.loader.exec_module(module)
 
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "e2e: privileged end-to-end tests (real BPF + loopback NFS); "
+        "skipped unless VNFS_E2E=1",
+    )
+
+
 @pytest.fixture(scope="session")
 def data():
     from vnfs_collector.nfsops import hashabledict

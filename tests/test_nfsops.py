@@ -11,6 +11,7 @@ from vnfs_collector.nfsops import (
     MountsMap,
     PidEnvMap,
     MaintenanceScheduler,
+    StatsCollector,
 )
 from tests.conftest import ROOT
 
@@ -303,3 +304,85 @@ def test_anonymize_valid_fields(data):
             name="TAGS",
         ),
     )
+
+
+def _make_stats_collector(batch_ops, counts_map_size=None):
+    collector = StatsCollector.__new__(StatsCollector)
+    collector.batch_ops = batch_ops
+    collector.counts_map_size = counts_map_size
+    return collector
+
+
+def test_drain_counts_batch_ops_success():
+    collector = _make_stats_collector(batch_ops=True)
+    counts = MagicMock()
+    counts.items_lookup_and_delete_batch.return_value = [("k", "v")]
+    assert collector._drain_counts(counts) == [("k", "v")]
+    counts.items.assert_not_called()
+    counts.clear.assert_not_called()
+
+
+@patch("vnfs_collector.nfsops.logger")
+def test_drain_counts_enospc_falls_back(mock_logger):
+    collector = _make_stats_collector(batch_ops=True)
+    counts = MagicMock()
+    counts.items_lookup_and_delete_batch.side_effect = Exception(
+        "BPF_MAP_LOOKUP_AND_DELETE_BATCH has failed: No space left on device"
+    )
+    counts.items.return_value = [("k2", "v2")]
+    assert collector._drain_counts(counts) == [("k2", "v2")]
+    counts.clear.assert_called_once()
+    assert mock_logger.warning.called
+    assert "falling back to items()+clear()" in mock_logger.warning.call_args[0][0]
+
+
+def test_drain_counts_non_enospc_reraises():
+    collector = _make_stats_collector(batch_ops=True)
+    counts = MagicMock()
+    counts.items_lookup_and_delete_batch.side_effect = Exception("other failure")
+    with pytest.raises(Exception, match="other failure"):
+        collector._drain_counts(counts)
+
+
+def test_drain_counts_without_batch_ops():
+    collector = _make_stats_collector(batch_ops=False)
+    counts = MagicMock()
+    counts.items.return_value = [("k", "v")]
+    assert collector._drain_counts(counts) == [("k", "v")]
+    counts.items_lookup_and_delete_batch.assert_not_called()
+    counts.clear.assert_called_once()
+
+
+def test_consume_counts_drops_reads_and_clears():
+    collector = _make_stats_collector(batch_ops=True, counts_map_size=32)
+    drops_tbl = MagicMock()
+    drops_tbl.items.return_value = [(0, 7)]
+    collector.b = MagicMock()
+    collector.b.get_table.return_value = drops_tbl
+    assert collector._consume_counts_drops() == 7
+    drops_tbl.clear.assert_called_once()
+
+
+@patch("vnfs_collector.nfsops.logger")
+def test_collect_stats_warns_only_when_drops(mock_logger):
+    collector = _make_stats_collector(batch_ops=True, counts_map_size=2)
+    collector.b = MagicMock()
+    collector.hostname = "host"
+    collector.pid_env_map = MagicMock()
+    collector.mounts_map = MagicMock()
+
+    counts = MagicMock()
+    counts.items_lookup_and_delete_batch.return_value = []
+    drops_tbl = MagicMock()
+    drops_tbl.items.return_value = [(0, 3)]
+    collector.b.get_table.side_effect = (
+        lambda name: counts if name == "counts" else drops_tbl
+    )
+
+    # Empty drain, but BPF reported 3 failed inserts.
+    df = collector.collect_stats(interval=1)
+    assert df.empty
+    assert mock_logger.warning.called
+    assert "dropped %d" in mock_logger.warning.call_args[0][0]
+    assert mock_logger.warning.call_args[0][1] == 3
+    drops_tbl.clear.assert_called_once()
